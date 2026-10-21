@@ -22,7 +22,7 @@ Content JSON shape:
     "salutation": "Dear Hiring Manager,",
     "paragraphs": ["Opening paragraph...", "Body paragraph...", "Closing paragraph..."],
     "sign_off": "Sincerely,",
-    "name": "Jordan Smith"
+    "name": "Your Name"
   }
 }
 

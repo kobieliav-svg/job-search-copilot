@@ -1,0 +1,15 @@
+# Personal data - never commit
+profile/FACTS.md
+profile/STYLE.md
+profile/SCORING.md
+profile/SETTINGS.json
+company_targets.csv
+company_targets_removed.csv
+pipeline/
+output/
+templates/*.docx
+!templates/examples/*.docx
+.browser_profile/
+.venv/
+__pycache__/
+*.pyc

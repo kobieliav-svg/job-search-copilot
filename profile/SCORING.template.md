@@ -16,20 +16,20 @@ python scripts/pipeline.py score --url "<job url>" --score 87 --track A --note "
 
 ## Weighted criteria
 
-Ask the user, in plain conversation, what actually matters most when they look at a posting and
-decide "yes" or "no" — then turn that into 3-5 weighted criteria that sum to 100%. Role fit and
-location are almost always two of them; the rest depends on the person. Write the final list here,
-replacing this example:
+The weights live in `profile/SETTINGS.json` (`scoring.weights`) and must sum to 100. The default is
+below. Role fit gets the most weight on purpose: when location weighs more, jobs that are nearby but
+not a real fit tend to land above 60. Change the weights with the user during setup if they decide
+differently, and keep this table in step with SETTINGS.json.
 
-| Criterion | Weight | Full marks means |
+| Criterion | Default weight | Full marks means |
 |---|---|---|
-| Role fit | 35% | <the real duties (read the description, not just the title) match the user's actual target work, per FACTS.md — check the *domain*, not just keyword overlap> |
-| Location | 40% | <the user's top-priority locations/remote preference from FACTS.md get full marks; next-tier locations get high but not full; anything else scores down> |
-| Seniority match | 15% | <level matches the user's actual experience — not a meaningful downgrade, not out of reach> |
-| Employment type / compensation | 10% | <full-time/contract preference from FACTS.md; deduct only if listed pay is clearly below a reasonable range> |
+| Role fit | 40 | <the real duties (read the description, not just the title) match the user's actual target work, per FACTS.md -- check the *domain*, not just keyword overlap> |
+| Location | 25 | <the user's top-priority locations/remote preference from SETTINGS.json get full marks; lower-priority ones get high but not full; anything else scores down> |
+| Seniority match | 20 | <level matches the user's actual experience -- not a meaningful downgrade, not out of reach> |
+| Type and pay | 15 | <full-time/contract preference from FACTS.md; deduct only if listed pay is clearly below a reasonable range for the level> |
 
 Write the per-criterion breakdown into `--note` (not just a one-line verdict) so every score is
-auditable later, e.g. `"Role 30/35, Location 40/40, Seniority 12/15, Type 10/10 = 92"`.
+auditable later, e.g. `"Role 34/40, Location 25/25, Seniority 16/20, Type 12/15 = 87"`.
 
 ## Hard red flags (override the weighted score, don't just subtract points)
 
@@ -44,7 +44,8 @@ actually true for them, delete the rest, and add anything specific they mention:
 - **A seniority level clearly above or below their real ceiling/floor** -> cap Seniority low, don't
   give it a pass just because the rest of the posting reads well.
 - **A specific "required"/"non-negotiable" line names something absent from FACTS.md** -> cap the
-  score low, but check FACTS.md carefully first — don't assume a gap that isn't actually there.
+  score at 55 at most (so it does not reach the board) and name the gap in the note, but check
+  FACTS.md carefully first — don't assume a gap that isn't actually there.
 - **Templated/generic posting with pay mismatched to the role** -> add "CAUTION: possible low-
   quality/scam listing" to the note.
 - **Title doesn't match the actual described duties** -> score the real duties, not the title, and

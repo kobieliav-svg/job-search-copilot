@@ -1,0 +1,77 @@
+{
+  "_about": "Your personal search settings. Claude fills this in during the setup interview and updates it whenever you ask (for example: 'widen the radius to 50 km' or 'add project manager roles'). You never need to edit it by hand. Keys that start with '_' are notes and are ignored by the scripts.",
+  "country": "",
+  "_country_help": "Country you are job hunting in, e.g. 'Canada'. Some sources only exist in one country (Job Bank is Canada only).",
+  "tracks": {
+    "A": {
+      "label": "",
+      "titles": [],
+      "_help": "Your main target. label: a short name, e.g. 'Customer service leadership'. titles: the job titles to search for, e.g. ['Customer Service Manager', 'Director of Customer Experience']."
+    },
+    "B": {
+      "label": "",
+      "titles": [],
+      "_help": "Optional second target, e.g. a step down in seniority or an adjacent field. Leave titles empty to use one track only."
+    }
+  },
+  "locations": [
+    {
+      "place": "",
+      "radius_km": 25,
+      "remote_only": false,
+      "priority": 1
+    }
+  ],
+  "_locations_help": "Where to search, in priority order (1 = most wanted). place: a city and province/state, e.g. 'Ottawa, ON'. radius_km: how far around it. For remote jobs anywhere in the country add { 'place': '<country>', 'remote_only': true, 'priority': 1 }.",
+  "sources": {
+    "jobbank": {
+      "enabled": false,
+      "days": [
+        "Mon",
+        "Thu"
+      ]
+    },
+    "company_sites": {
+      "enabled": true,
+      "file": "company_targets.csv"
+    },
+    "email_alerts": {
+      "enabled": false,
+      "provider": "gmail",
+      "search": ""
+    },
+    "extra": []
+  },
+  "_sources_help": "jobbank: Government of Canada Job Bank, Canada only; days = which nights it runs. company_sites: the career pages listed in company_targets.csv. email_alerts: job-alert emails in Gmail (the only provider supported for now); search = a Gmail search that finds them, e.g. 'from:alerts@example.com'. extra: other sites you asked Claude to add, each { 'name', 'url', 'how', 'added_on', 'terms_checked_by_user' }. Before adding any site, you are responsible for checking that its terms of use allow automated reading.",
+  "title_filter": {
+    "keep_words": [],
+    "exclude_words": [],
+    "_help": "Set aside titles before reading the posting. keep_words: if not empty, a title must contain at least one of these (e.g. ['customer', 'service', 'operations']). exclude_words: titles containing any of these are set aside (e.g. ['nurse', 'driver']). Set-aside jobs get score 0 with a note and can be moved back on the dashboard. Claude suggests both lists from your target roles."
+  },
+  "scoring": {
+    "weights": {
+      "role_fit": 40,
+      "location": 25,
+      "seniority": 20,
+      "type_and_pay": 15
+    },
+    "show_on_board_from": 60,
+    "_help": "How each posting's 0-100 score is built. Weights must add up to 100. The default gives role fit the most weight on purpose: a high weight on location tends to inflate scores for jobs that are nearby but not a real fit. show_on_board_from: the minimum score for the New column on the dashboard."
+  },
+  "documents": {
+    "resume_max_pages": 2,
+    "standing_notes": [],
+    "_help": "standing_notes: rules for every resume and cover letter, in your own words, e.g. 'Always mention my PMP certification'. Claude adds to this list when you give a rule that should apply every time."
+  },
+  "schedule": {
+    "scan_time": "01:00",
+    "scan_nights": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu"
+    ],
+    "_help": "Full setup only: when the nightly scan runs on your computer. The computer must be on (or able to wake) at this time."
+  }
+}

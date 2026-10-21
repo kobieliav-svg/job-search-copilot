@@ -8,7 +8,11 @@ and imported as a module (from the scanner scripts).
 Statuses (in order): New -> Scored -> Shortlisted -> Applied -> Interviewing -> Offer / Rejected -> Archived
 """
 import argparse
+import os
+import shutil
 import sys
+import time
+import zipfile
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -22,7 +26,7 @@ XLSX_PATH = ROOT / "pipeline" / "jobs.xlsx"
 SHEET_NAME = "Jobs"
 
 COLUMNS = [
-    "source",       # linkedin / indeed / jobbank / glassdoor / manual
+    "source",       # jobbank / company:<name> / email_alert / <added source> / manual
     "title",
     "company",
     "location",
@@ -31,7 +35,7 @@ COLUMNS = [
     "category",     # DERIVED, not hand-edited -- recomputed from status+track on every save (see
                      # _refresh_category_column): "New", "Track A", "Track B", or "Untracked". Lets
                      # the user spot new/track at a glance while scrolling the full Jobs sheet,
-                     # without switching to the Candidates tab. Added 2026-08-12.
+                     # without switching to the Candidates tab.
     "url",          # dedupe key
     "date_found",
     "description",
@@ -46,14 +50,16 @@ COLUMNS = [
     "outreach_follow_up_date",  # outreach_sent_date + OUTREACH_FOLLOW_UP_DAYS; cleared once the
                                  # status moves to Applied/Interviewing/Offer/Rejected (the outreach
                                  # did its job either way, no need to nudge on it anymore)
-    "linkedin_contact_url",  # set by find_linkedin_connections.py -- scoped, opt-in, see SKILL.md
-    "linkedin_contact_note", # e.g. "confirmed 1st-degree connection" vs "people-search result, not a confirmed connection"
+    "contact_url",  # a person at the company the user knows or found (profile or email link)
+    "contact_note", # who they are and how the user knows them
     "referral_name",  # who the application was actually sent through, if anyone -- blank if none
     "referral_note",  # e.g. "forwarded resume directly to hiring manager, former colleague"
+    "applied_via",     # how the application went in (company site, by email, through a recruiter...)
+    "interview_date",  # next/last interview date, YYYY-MM-DD -- set from the dashboard
+    "interview_type",  # video / one-way video / phone / in person 
 ]
 
-# 'remote' and 'posted_date' were dropped (2026-08-11, at the user's request -- low signal, not
-# worth the column space). 'score'/'score_note' were moved right after 'location' for the same
+# 'remote' and 'posted_date' are not kept (low signal, not worth the column space). 'score'/'score_note' were moved right after 'location' for the same
 # reason: they're the columns the user actually scans first. See _migrate_schema() -- any COLUMNS
 # change (add, remove, or reorder) is handled safely by rebuilding the sheet from name-keyed data,
 # not by touching cells positionally.
@@ -68,8 +74,8 @@ OUTREACH_FOLLOW_UP_DAYS = 7  # shorter than FOLLOW_UP_DAYS -- a networking messa
                               # faster-cycle ask than a formal application, so a nudge makes sense sooner
 
 ARCHIVE_LOG_SHEET = "Archived_Log"
-# 'Archived' postings are DELETED from the Jobs sheet outright (2026-08-12, at the user's explicit
-# request -- rejected postings shouldn't sit in the file at all, not just be hidden). To keep the
+# 'Archived' postings are DELETED from the Jobs sheet outright (rejected postings
+# shouldn't sit in the file at all, not just be hidden). To keep the
 # dedup-by-URL guarantee ("an archived posting never resurfaces as New in a future scan") working
 # even though the row itself is gone, every archived URL is first logged here, permanently and
 # append-only -- this sheet is NEVER rebuilt/cleared like Summary/Candidates/Applications are.
@@ -111,6 +117,28 @@ def _log_archived(wb, url, title, company, note):
     log_ws.cell(row=row, column=5, value=date.today().isoformat())
 
 
+def _restore_from_archive(wb, ws, url, status_value):
+    """Recreate a Jobs row for a URL that is only in Archived_Log (used to
+    bring an archived job back from the dashboard search). The log row is kept as history. The
+    description was not kept when the job was archived; Prepare reads it from the posting."""
+    if ARCHIVE_LOG_SHEET not in wb.sheetnames:
+        return None
+    hit = None
+    for r in wb[ARCHIVE_LOG_SHEET].iter_rows(min_row=2, values_only=True):
+        if r and r[0] == url:
+            hit = r
+    if not hit:
+        return None
+    row = ws.max_row + 1
+    today = date.today().isoformat()
+    vals = {"source": "restored", "title": hit[1], "company": hit[2], "url": url, "date_found": today,
+            "status": status_value, "last_updated": today,
+            "status_note": f"Brought back from the archive on {today} by the user (archived {hit[4] or '?'}: {hit[3] or 'no note'}). Description not kept; Prepare reads it from the posting."}
+    for k, v in vals.items():
+        ws.cell(row=row, column=_col_index(k), value=v)
+    return row
+
+
 def init() -> Workbook:
     XLSX_PATH.parent.mkdir(exist_ok=True)
     if XLSX_PATH.exists():
@@ -133,7 +161,7 @@ def _apply_layout(ws):
     ws.freeze_panes = "A2"
 
     # Auto-filter + a colour scale on the score column, so the user can sort/filter/triage
-    # directly in Excel without needing to ask for a CLI summary every time -- added 2026-08-11
+    # directly in Excel without needing to ask for a CLI summary every time
     # once the row count (205+) made scrolling through the raw sheet impractical.
     last_col = get_column_letter(len(COLUMNS))
     ws.auto_filter.ref = f"A1:{last_col}1048576"
@@ -217,12 +245,45 @@ def _save(wb):
     """The one place that actually writes to disk. Every write path (add_job, score, set_status,
     etc.) calls this instead of wb.save() directly, so the category column and the
     Summary/Candidates/Applications sheets are always rebuilt from the current Jobs data and never
-    go stale."""
+    go stale.
+
+    Saves to a temp file in the same directory and os.replace()s it into place, rather than
+    writing XLSX_PATH directly. Several scanner scripts can be running concurrently (each its own
+    process, each doing a load-modify-save cycle with no locking), and wb.save() writes its zip
+    incrementally -- a concurrent load_workbook() on the real path during that window can catch it
+    mid-write and raise BadZipFile. os.replace() is atomic on both Windows and POSIX, so readers
+    only ever see a complete old file or a complete new one, never a partial one. This does not
+    make concurrent writers safe from clobbering each other's changes (last save wins), just safe
+    from corrupting the file readers see.
+    """
     _refresh_category_column(wb[SHEET_NAME])
     _write_summary_sheet(wb)
     _write_candidates_sheet(wb)
     _write_applications_sheet(wb)
-    wb.save(XLSX_PATH)
+    tmp_path = XLSX_PATH.with_name(f".{XLSX_PATH.name}.tmp-{os.getpid()}")
+    wb.save(tmp_path)
+    # never let a bad file replace a
+    # good one. The new file is checked first; if it does not read back, it is written once more,
+    # and if it still fails the save stops here and the current jobs.xlsx is left untouched.
+    if not _file_ok(tmp_path):
+        wb.save(tmp_path)
+        if not _file_ok(tmp_path):
+            raise RuntimeError("jobs.xlsx was NOT saved: the new file did not pass the check; the previous file is unchanged.")
+    _keep_backup(tmp_path)
+    # OneDrive sync or another process can hold jobs.xlsx for a few seconds; this
+    # can make a save fail (WinError 5). Retry for up to ~40s before failing.
+    for attempt in range(8):
+        try:
+            os.replace(tmp_path, XLSX_PATH)
+            if not _file_ok(XLSX_PATH):  # damaged on the way to disk (sync layer): put the checked copy back
+                shutil.copyfile(LAST_GOOD, XLSX_PATH)
+                print("  jobs.xlsx was damaged while saving -- restored the copy that was just checked.")
+            return
+        except PermissionError:
+            if attempt == 7:
+                raise
+            print("  jobs.xlsx is busy (OneDrive/Excel?) -- retrying the save in 5s...")
+            time.sleep(5)
 
 
 def _write_summary_sheet(wb):
@@ -273,19 +334,22 @@ def _write_summary_sheet(wb):
         ws.column_dimensions[col_letter].width = width
 
 
-CANDIDATES_LIMIT = 15  # only the top N by score surface here, full stop -- see 2026-08-12 note below.
+CANDIDATES_LIMIT = 15  # only the top N by score surface here, full stop.
+CANDIDATES_MIN_SCORE = 60  # don't pad this tab with low-score/
+                            # unscored rows just to fill it to CANDIDATES_LIMIT -- if fewer than 15
+                            # postings genuinely clear the bar, show fewer. Rows with no score yet
+                            # (status New) are excluded by the same rule, not just low-score ones.
 
 
 def _write_candidates_sheet(wb):
     """Rebuild the 'Candidates' tab: strictly the top CANDIDATES_LIMIT postings still in play
     (New/Scored/Shortlisted -- not yet applied, not archived), ranked by score highest-first, as
     ONE flat table with a Category column (New / Track A / Track B / Untracked). Includes
-    Status Note (added 2026-08-13, at the user's request -- this is the primary tab they actually
-    look at day to day, so outreach/status notes need to be visible here too, not just on Jobs).
+    Status Note (this is the tab users look at day to day, so outreach/status notes need to be
+    visible here too, not just on Jobs).
 
-    2026-08-12: briefly tried auto-including 'New' rows and everything touched today, uncapped, so
-    a same-day scan-and-score run stayed visible here regardless of score. The user reverted that:
-    they want this tab to stay a strict top-15-by-score, full stop, and want visibility into
+    Design note: auto-including 'New' rows and everything touched today, uncapped, was tried and
+    reverted: this tab is meant to stay a strict top-15-by-score, full stop, and want visibility into
     newly-added/newly-scored postings some other way instead -- see the 'category' column added to
     the Jobs sheet itself (_refresh_category_column) for that. Don't reintroduce an uncapped group
     here without being asked again."""
@@ -297,14 +361,14 @@ def _write_candidates_sheet(wb):
     jobs_ws = wb[SHEET_NAME]
     rows = [r for r in list_jobs(ws=jobs_ws) if r["status"] in ("New", "Scored", "Shortlisted")]
 
-    def _sort_key(r):
+    def _score_val(r):
         try:
-            score_val = float(r["score"]) if r["score"] not in (None, "") else -1
+            return float(r["score"]) if r["score"] not in (None, "") else None
         except (TypeError, ValueError):
-            score_val = -1
-        return score_val
+            return None
 
-    rows.sort(key=_sort_key, reverse=True)
+    rows = [r for r in rows if (_score_val(r) or -1) >= CANDIDATES_MIN_SCORE]
+    rows.sort(key=lambda r: _score_val(r) or -1, reverse=True)
     rows = rows[:CANDIDATES_LIMIT]
 
     fields = ("category", "title", "company", "location", "score", "status", "status_note", "url")
@@ -366,9 +430,70 @@ def _write_applications_sheet(wb):
     ws.auto_filter.ref = f"A1:{last_col}{max(len(applied_rows) + 1, 1)}"
 
 
+BACKUP_DIR = ROOT / "pipeline" / "backups"
+LAST_GOOD = BACKUP_DIR / "jobs.last-good.xlsx"
+BACKUP_SLOTS = 5          # rotating copies, overwritten in turn (nothing is ever deleted)
+BACKUP_EVERY_S = 3600     # at most one rotating copy per hour; LAST_GOOD is refreshed on every save
+
+
+def _file_ok(path) -> bool:
+    """True if the xlsx is a complete, readable file (every part decompresses and the Jobs sheet loads)."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            if z.testzip() is not None:
+                return False
+        with open(path, "rb") as fh:  # a file object: openpyxl rejects the temp file's extension by name
+            wb = load_workbook(fh, read_only=True)
+            ok = SHEET_NAME in wb.sheetnames
+            if ok:
+                next(wb[SHEET_NAME].iter_rows(max_row=1, values_only=True), None)
+            wb.close()
+        return ok
+    except Exception:
+        return False
+
+
+def _keep_backup(checked_path):
+    """Copy a file that has just passed _file_ok() to backups/ -- always as LAST_GOOD, and
+    once an hour into the oldest of BACKUP_SLOTS rotating slots."""
+    try:
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(checked_path, LAST_GOOD)
+        slots = [BACKUP_DIR / f"jobs.backup-{i}.xlsx" for i in range(BACKUP_SLOTS)]
+        newest = max((p.stat().st_mtime for p in slots if p.exists()), default=0)
+        if time.time() - newest >= BACKUP_EVERY_S:
+            target = min(slots, key=lambda p: p.stat().st_mtime if p.exists() else 0)
+            shutil.copyfile(checked_path, target)
+    except OSError as e:
+        print(f"  (backup copy of jobs.xlsx skipped: {e})")
+
+
+def _repair_if_damaged():
+    """If jobs.xlsx cannot be read, set the damaged file aside (renamed, never deleted)
+    and put the last checked copy back, so scans and agents keep working."""
+    if not XLSX_PATH.exists() or _file_ok(XLSX_PATH):
+        return
+    if not (LAST_GOOD.exists() and _file_ok(LAST_GOOD)):
+        raise RuntimeError("jobs.xlsx is damaged and there is no good backup to restore -- restore it from OneDrive version history.")
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    os.replace(XLSX_PATH, BACKUP_DIR / f"jobs.DAMAGED-{stamp}.xlsx")
+    shutil.copyfile(LAST_GOOD, XLSX_PATH)
+    print(f"WARNING: jobs.xlsx was damaged; restored the last good copy (saved {time.ctime(LAST_GOOD.stat().st_mtime)}). "
+          f"The damaged file is in pipeline/backups/.", file=sys.stderr)
+
+
+def _track_label(t):
+    try:
+        import settings
+        return (settings.tracks().get(t) or {}).get("label") or "not set"
+    except SystemExit:
+        return "not set"
+
+
 def _load():
     if not XLSX_PATH.exists():
         init()
+    _repair_if_damaged()
     wb = load_workbook(XLSX_PATH)
     ws = wb[SHEET_NAME]
     if _migrate_schema(wb, ws):
@@ -428,6 +553,113 @@ def add_job(source, title, company, location, url, remote="", posted_date="", de
     return True, row
 
 
+def _posting_key(company, title):
+    import re
+    t = str(title or "").split("\n")[0].lower().replace("with verification", "")
+    return (re.sub(r"[^a-z0-9]", "", str(company or "").lower()), re.sub(r"[^a-z0-9]", "", t))
+
+
+_CLOSED_WORDS = ("no longer accepting", "closed per posting", "closed:", "posting closed", "duplicate of")
+
+
+def _seen_postings(wb, ws):
+    """{(company, title): {"skip": bool, "what": str}} from the Jobs sheet and Archived_Log.
+    skip=True when the user set that job aside themselves (archived for a reason other than the posting
+    being closed or a duplicate) - a re-post of it is not added again."""
+    seen = {}
+    cols = {n: _col_index(n) for n in ("company", "title", "status", "status_note", "date_found")}
+    for r in range(2, ws.max_row + 1):
+        st = str(ws.cell(row=r, column=cols["status"]).value or "")
+        k = _posting_key(ws.cell(row=r, column=cols["company"]).value, ws.cell(row=r, column=cols["title"]).value)
+        if not k[1]:
+            continue
+        note = str(ws.cell(row=r, column=cols["status_note"]).value or "").lower()
+        # any job he already acted on (shortlisted, applied, archived for any reason)
+        # is never added again as a re-post; only jobs that were merely found/scored come back, with a note.
+        skip = st in ("Archived", "Shortlisted", "Applied", "Interviewing", "Offer", "Rejected")
+        prev = seen.get(k)
+        what = f"{st} since {str(ws.cell(row=r, column=cols['date_found']).value or '')[:10]}"
+        seen[k] = {"skip": skip or bool(prev and prev["skip"]), "what": prev["what"] if prev and prev["skip"] and not skip else what}
+    if "Archived_Log" in wb.sheetnames:
+        rows = wb["Archived_Log"].iter_rows(values_only=True)
+        next(rows, None)
+        for a in rows:
+            if not a or not a[0]:
+                continue
+            k = _posting_key(a[2], a[1])
+            note = str(a[3] or "").lower()
+            skip = True  # archived = already handled, whatever the reason
+            prev = seen.get(k)
+            what = f"archived {str(a[4] or '')[:10]}: {str(a[3] or '')[:60]}"
+            if prev is None or (skip and not prev["skip"]):
+                seen[k] = {"skip": skip or bool(prev and prev["skip"]), "what": what}
+    return seen
+
+
+def add_jobs(items):
+    """Batch version of add_job: load the jobs file once, add every new posting
+    from one search, save once. items: dicts with source/title/company/location/url and
+    optional description. Returns how many were actually added (duplicates and previously
+    archived URLs are skipped exactly like add_job)."""
+    items = [i for i in (items or []) if i and i.get("url")]
+    if not items:
+        return 0
+    wb, ws = _load()
+    url_col = _col_index("url")
+    known = {ws.cell(row=r, column=url_col).value for r in range(2, ws.max_row + 1)}
+    known |= _archived_urls(wb)
+    seen = _seen_postings(wb, ws)
+    today = date.today().isoformat()
+    added = 0
+    for it in items:
+        url = it["url"]
+        if url in known:
+            continue
+        # Job boards re-post the same job under a new id. A re-post of a job the user
+        # set aside himself is not added again; any other re-post is added with a note saying so.
+        prior = seen.get(_posting_key(it.get("company"), it.get("title")))
+        if prior and prior["skip"]:
+            continue
+        repost_note = f"Repost of a job seen before ({prior['what']})." if prior else ""
+        row = ws.max_row + 1
+        values = {
+            "source": it.get("source", ""), "title": it.get("title", ""),
+            "company": it.get("company", ""), "location": it.get("location", ""),
+            "url": url, "date_found": today, "description": it.get("description", "") or "",
+            "score": "", "score_note": "", "status": "New", "status_note": repost_note,
+            "last_updated": today, "track": "", "applied_date": "", "follow_up_date": "",
+        }
+        for col_name, value in values.items():
+            ws.cell(row=row, column=_col_index(col_name), value=value)
+        known.add(url)
+        added += 1
+    if added:
+        _save(wb)
+    return added
+
+
+def update_descriptions(mapping):
+    """Batch version of update_description: {url: text} -> one load, one save.
+    Unknown URLs are skipped (the row may have been archived meanwhile). Returns the count."""
+    if not mapping:
+        return 0
+    wb, ws = _load()
+    url_col = _col_index("url")
+    rows = {ws.cell(row=r, column=url_col).value: r for r in range(2, ws.max_row + 1)}
+    today = date.today().isoformat()
+    n = 0
+    for url, text in mapping.items():
+        r = rows.get(url)
+        if not r:
+            continue
+        ws.cell(row=r, column=_col_index("description"), value=text)
+        ws.cell(row=r, column=_col_index("last_updated"), value=today)
+        n += 1
+    if n:
+        _save(wb)
+    return n
+
+
 def score(url, value, note="", track=""):
     wb, ws = _load()
     row = _find_row_by_url(ws, url)
@@ -462,6 +694,9 @@ def set_status(url, status_value, note=""):
         raise ValueError(f"Unknown status '{status_value}'. Must be one of: {', '.join(STATUSES)}")
     wb, ws = _load()
     row = _find_row_by_url(ws, url)
+    if not row and status_value != "Archived":
+        # the dashboard search can bring an archived job back to the board.
+        row = _restore_from_archive(wb, ws, url, status_value)
     if not row:
         raise ValueError(f"No job found with url: {url}")
 
@@ -506,9 +741,9 @@ def set_outreach(url, contact_name, note=""):
     from set_contact() (just 'found someone who works there') and from set_referral() (a later,
     more definite fact that an application itself went through that person). This is the middle
     step: a message went out, and it starts its own follow-up clock (OUTREACH_FOLLOW_UP_DAYS,
-    shorter than the Applied one) since a LinkedIn message is a lighter, faster-cycle ask.
+    shorter than the Applied one) since an outreach message is a lighter, faster-cycle ask.
     Auto-bumps status to Shortlisted if it's still New/Scored -- sending an outreach message is
-    itself a sign of active pursuit. Added 2026-08-13, at the user's request: follow-up tracking
+    itself a sign of active pursuit. Follow-up tracking
     needs to cover outreach messages, not just formal applications."""
     wb, ws = _load()
     row = _find_row_by_url(ws, url)
@@ -528,21 +763,36 @@ def set_outreach(url, contact_name, note=""):
 
 
 def set_contact(url, contact_url, note=""):
-    """Record a LinkedIn contact found for this job -- written by
-    find_linkedin_connections.py, which is opt-in/manual, never run automatically."""
+    """Record a contact at the company for this job -- written by
+    the user or Claude when the user names someone they know there."""
     wb, ws = _load()
     row = _find_row_by_url(ws, url)
     if not row:
         raise ValueError(f"No job found with url: {url}")
-    ws.cell(row=row, column=_col_index("linkedin_contact_url"), value=contact_url)
-    ws.cell(row=row, column=_col_index("linkedin_contact_note"), value=note)
+    ws.cell(row=row, column=_col_index("contact_url"), value=contact_url)
+    ws.cell(row=row, column=_col_index("contact_note"), value=note)
+    ws.cell(row=row, column=_col_index("last_updated"), value=date.today().isoformat())
+    _save(wb)
+
+
+def set_appmeta(url, applied_date=None, applied_via=None, interview_date=None, interview_type=None):
+    """Application details edited on the dashboard's job page. Only the
+    arguments that are given (not None) are written; an empty string clears that cell."""
+    wb, ws = _load()
+    row = _find_row_by_url(ws, url)
+    if not row:
+        raise ValueError(f"No job found with url: {url}")
+    for col, val in (("applied_date", applied_date), ("applied_via", applied_via),
+                     ("interview_date", interview_date), ("interview_type", interview_type)):
+        if val is not None:
+            ws.cell(row=row, column=_col_index(col), value=val)
     ws.cell(row=row, column=_col_index("last_updated"), value=date.today().isoformat())
     _save(wb)
 
 
 def set_referral(url, name, note=""):
     """Record that an application was actually sent through a referral, and who -- distinct from
-    linkedin_contact_url/note (which is just 'someone found who works there'); this is the later,
+    contact_url/note (which is just 'someone found who works there'); this is the later,
     more definite fact that the application itself went through that person."""
     wb, ws = _load()
     row = _find_row_by_url(ws, url)
@@ -720,12 +970,16 @@ def main() -> int:
     p_add.add_argument("--url", required=True)
     p_add.add_argument("--description", default="")
 
+    p_addm = sub.add_parser("add-jobs", help="Add many postings from a JSON file: a list of "
+                            "{source, title, company, location, url, description?}. Used for job-alert emails.")
+    p_addm.add_argument("--file", required=True)
+
     p_score = sub.add_parser("score")
     p_score.add_argument("--url", required=True)
     p_score.add_argument("--score", required=True, type=int)
     p_score.add_argument("--note", default="")
     p_score.add_argument("--track", default="", choices=["", "A", "B"],
-                          help="A = primary target track, B = secondary/backup track, as defined in profile/SCORING.md")
+                          help="A = senior Ops/CX/Systems-Implementation leadership, B = Coordinator/Office-Manager admin")
 
     p_track = sub.add_parser("track", help="Tag (or retag) a row's track without touching its score.")
     p_track.add_argument("--url", required=True)
@@ -741,7 +995,7 @@ def main() -> int:
     p_list.add_argument("--min-score", default=None, type=float)
     p_list.add_argument("--track", default=None, choices=["A", "B"])
 
-    p_contact = sub.add_parser("contact", help="Record a LinkedIn contact found for a job.")
+    p_contact = sub.add_parser("contact", help="Record a contact at the company for a job.")
     p_contact.add_argument("--url", required=True)
     p_contact.add_argument("--contact-url", required=True)
     p_contact.add_argument("--note", default="")
@@ -750,6 +1004,13 @@ def main() -> int:
     p_referral.add_argument("--url", required=True)
     p_referral.add_argument("--name", required=True)
     p_referral.add_argument("--note", default="")
+
+    p_meta = sub.add_parser("appmeta", help="Set applied date/via and interview date/type (dashboard job page).")
+    p_meta.add_argument("--url", required=True)
+    p_meta.add_argument("--applied-date", default=None)
+    p_meta.add_argument("--applied-via", default=None)
+    p_meta.add_argument("--interview-date", default=None)
+    p_meta.add_argument("--interview-type", default=None)
 
     p_outreach = sub.add_parser("outreach", help="Record that a networking/outreach message was sent to a found contact -- starts its own follow-up clock.")
     p_outreach.add_argument("--url", required=True)
@@ -765,7 +1026,7 @@ def main() -> int:
     p_desc.add_argument("--description", required=True)
 
     p_missing = sub.add_parser("missing-description")
-    p_missing.add_argument("--source", default=None, help="Only rows whose source starts with this (e.g. 'linkedin').")
+    p_missing.add_argument("--source", default=None, help="Only rows whose source starts with this (e.g. 'jobbank').")
 
     sub.add_parser("summary")
 
@@ -780,6 +1041,10 @@ def main() -> int:
             description=args.description,
         )
         print(f"{'Added' if added else 'Already tracked (skipped)'} row {row}: {args.title} @ {args.company}")
+    elif args.cmd == "add-jobs":
+        import json as _json
+        items = _json.loads(Path(args.file).read_text(encoding="utf-8"))
+        print(f"Added {add_jobs(items)} new job(s) from {args.file} (duplicates and set-aside jobs skipped).")
     elif args.cmd == "score":
         score(args.url, args.score, args.note, track=args.track)
         print(f"Scored {args.score}{' (track ' + args.track + ')' if args.track else ''}: {args.url}")
@@ -789,6 +1054,9 @@ def main() -> int:
     elif args.cmd == "contact":
         set_contact(args.url, args.contact_url, args.note)
         print(f"Contact recorded: {args.url}")
+    elif args.cmd == "appmeta":
+        set_appmeta(args.url, args.applied_date, args.applied_via, args.interview_date, args.interview_type)
+        print(f"Application details recorded: {args.url}")
     elif args.cmd == "referral":
         set_referral(args.url, args.name, args.note)
         print(f"Referral recorded ({args.name}): {args.url}")
@@ -823,9 +1091,9 @@ def main() -> int:
         if outreach_follow_ups_due:
             print(f"\nFollow up now -- outreach message sent {OUTREACH_FOLLOW_UP_DAYS}+ days ago with no reply:")
             _print_rows(outreach_follow_ups_due, fields=("title", "company", "outreach_sent_date", "outreach_follow_up_date", "url"))
-        print("\nTop unapplied -- Track A (see profile/SCORING.md for what this track means for you):")
+        print(f"\nTop unapplied -- Track A ({_track_label('A')}):")
         _print_rows(top_a)
-        print("\nTop unapplied -- Track B (see profile/SCORING.md for what this track means for you):")
+        print(f"\nTop unapplied -- Track B ({_track_label('B')}):")
         _print_rows(top_b)
         if top_untracked:
             print("\nTop unapplied -- no track tagged yet (run `pipeline.py track` to tag these):")

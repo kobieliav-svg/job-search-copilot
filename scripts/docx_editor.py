@@ -70,12 +70,15 @@ def section_paragraphs(doc: Document, heading_text: str):
     idx = find_heading_index(doc, heading_text)
     if idx is None:
         return None, []
+    # The "looks like a new section" guess is only for resumes typed without Word heading styles.
+    # When the resume uses real Heading styles, a section simply ends at the next heading.
+    styled = any(_is_heading(p) and p.text.strip() for p in doc.paragraphs)
     body = []
     for j in range(idx + 1, len(doc.paragraphs)):
         para = doc.paragraphs[j]
         if _is_heading(para) and para.text.strip():
             break
-        if _looks_like_section_break(para):
+        if not styled and _looks_like_section_break(para):
             break
         body.append(j)
     return idx, body

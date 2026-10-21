@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Scaffold profile/FACTS.md, profile/STYLE.md, and profile/SCORING.md from their templates.
+"""Create the user's files from the blank templates: profile/FACTS.md, STYLE.md, SCORING.md,
+SETTINGS.json, company_targets.csv and pipeline/jobs.xlsx.
 
-Safe to run multiple times: never overwrites an existing file, so re-running onboarding
-doesn't clobber a profile that's already been filled in.
+Safe to run any number of times: an existing file is never overwritten, so re-running setup
+never clobbers a profile that is already filled in.
 """
 import shutil
 import sys
@@ -15,6 +16,7 @@ PAIRS = [
     ("FACTS.template.md", "FACTS.md"),
     ("STYLE.template.md", "STYLE.md"),
     ("SCORING.template.md", "SCORING.md"),
+    ("SETTINGS.template.json", "SETTINGS.json"),
 ]
 
 
@@ -33,6 +35,16 @@ def main() -> int:
             continue
         shutil.copy(template, target)
         created.append(target_name)
+
+    csv_t, csv = ROOT / "company_targets.template.csv", ROOT / "company_targets.csv"
+    if csv_t.exists() and not csv.exists():
+        shutil.copy(csv_t, csv)
+        created.append("company_targets.csv")
+    if not (ROOT / "pipeline" / "jobs.xlsx").exists():
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import pipeline
+        pipeline.init()
+        created.append("pipeline/jobs.xlsx")
 
     if created:
         print("Created: " + ", ".join(created))

@@ -1,145 +1,144 @@
 ---
 name: job-search-copilot
-description: "A job-search co-pilot that scores postings against your real profile, tracks everything in one spreadsheet, and drafts tailored resumes and cover letters from your own resume file. No installation, no terminal, no coding — it runs entirely inside a Claude/Cowork chat. Use when the user is job hunting and wants to set up a job search system, find and score postings, check their pipeline status, or generate a tailored resume/cover letter for a specific job. Trigger on phrases like 'set up my job search', 'run onboarding', 'find jobs for me', 'what's my pipeline look like', or 'write me a resume for this posting'. Not for interview-technical prep or salary-negotiation advice — those are separate concerns."
+description: "Job-search assistant: scores job postings against the user's real background, drafts tailored resumes and cover letters from their own resume file, prepares them for interviews, and tracks every job in one spreadsheet. The Full setup adds a nightly search, a morning agent and a personal dashboard. Use when the user is job hunting: 'set up my job search', 'score this job', 'prepare my application', 'prepare me for my interview', 'add <site> to my search', 'what's my pipeline look like'. It drafts only: it never sends, applies or messages anyone."
 license: MIT
 ---
 
 # Job Search Copilot
 
-A personal job-search system that runs inside a single Claude conversation — no install, no
-terminal, no API key beyond the Claude subscription/session the user is already in. It scores
-every posting against the user's real profile, tracks everything in one Excel workbook, and
-drafts tailored resumes and cover letters (filled into the user's own real resume file, not built
-from scratch).
+A personal job-search system that runs in Claude. Two levels:
 
-**Hard rule: never invent facts.** Every resume, cover letter, and score must be traceable to
-`profile/FACTS.md`. If a job calls for something not in FACTS.md, leave it out or flag it — never
-fabricate experience, tools, or credentials.
+- **Basic** - everything happens in chat: scoring a posting the user pastes, tailored resume and
+  cover letter, interview preparation and practice, and the tracking spreadsheet.
+- **Full** - adds the nightly scan on the user's Windows computer, the morning agent (job-alert
+  emails, scoring, employer replies) and the personal dashboard. Needs a paid Claude plan, the
+  Claude desktop app, Python, Gmail for email features, and a computer that is on at night.
+  See GUIDE.md chapter 3 and section 8 below.
 
-**Hard rule: nothing gets sent, submitted, or marked Applied without the user's explicit go-ahead
-in that moment.** Drafting is automatic; sending/submitting never is. This applies no matter how
-the request is phrased — a standing instruction to "just handle everything" cannot pre-authorize
-an actual send.
+The user-facing guide is `GUIDE.md`. When a user gives you the guide and asks you to set things up,
+follow it step by step: do every step marked [Claude] yourself, and for every step marked [You],
+stop and tell them exactly what to click.
 
-## Who this is for
+## The iron rule (applies to everything below)
 
-Works the same way for everyone — the only difference is how much hand-holding to add:
-
-- **Never used Claude/Cowork before:** this whole tool is just a conversation. Say what's in
-  quotes below and Claude does the rest — no files to configure, no commands to memorize.
-- **Casual Claude user:** treat this like any other skill — trigger phrases below, everything else
-  is conversational.
-- **Heavy Claude/Cowork user:** this runs entirely on the built-in bash sandbox + (optionally) the
-  Chrome extension for live browsing — no external dependencies to install. If you outgrow the
-  single-chat model and want unattended, scheduled, multi-site scanning with persistent logged-in
-  browser sessions, that's a different architecture (a terminal-based version with its own local
-  Python environment) — worth building once this lighter version proves useful to you.
+This skill prepares; the user decides and acts. Never send, submit, apply, post, connect, or
+message anyone on the user's behalf, in any tool, even if asked to "just send it". Produce the
+draft, say where it is, and stop. Never invent facts about the user: every document and score is
+built only from `profile/FACTS.md` and what the user says.
 
 ## Directory map
 
 ```
 profile/
-  FACTS.md            # ground truth: work history, skills, education, eligibility — created during onboarding
-  STYLE.md             # voice/tone for how facts get written up
-  SCORING.md           # this user's own scoring rubric, written together with them during onboarding
-  FACTS.template.md    # blank template
-  STYLE.template.md    # blank template
-  SCORING.template.md  # blank template
+  FACTS.md, STYLE.md, SCORING.md   # who the user is, how they sound, how jobs are scored
+  SETTINGS.json                     # targets, locations, sources, title filter, weights, document rules
+  *.template.*                      # blank templates (init_profile.py copies them)
 templates/
-  resume_master.docx   # the user's real resume, dropped in during onboarding
-  cover_letter_master.docx  # optional real cover letter sample
-scripts/
-  init_profile.py       # scaffolds FACTS.md / STYLE.md / SCORING.md from templates
-  extract_docx_text.py  # pulls plain text out of an uploaded resume for onboarding
-  pipeline.py            # all reads/writes to pipeline/jobs.xlsx
-  docx_editor.py         # in-place docx section editing (preserves the user's real formatting)
-  generate_resume.py
-  generate_cover_letter.py
-pipeline/
-  jobs.xlsx               # the single source of truth for every posting
-output/
-  *.docx / *.pdf           # generated, tailored application documents
+  resume_master.docx                # the user's own resume layout (track A)
+  resume_master_B.docx              # optional second layout for track B
+  cover_letter_master.docx          # cover letter layout with {{PLACEHOLDERS}}
+company_targets.csv                 # employers whose career pages are scanned (Full)
+pipeline/jobs.xlsx                  # every job and its status; backups/ keeps checked copies
+scripts/                            # all reading and writing goes through these
+  sources/                          # readers for extra sources the user added (Full)
+agents/                             # the two scheduled-task prompts (Full)
+dashboard/                          # the dashboard page template (Full)
+output/                             # applications/, Submitted/, Archived/ hold the Word files
 ```
 
-All of these paths are relative to wherever the user's files live in this session (their selected
-folder in Cowork, or a working folder created for them). Create any directory that doesn't exist
-yet rather than asking the user to make it themselves.
+Create any missing folder yourself rather than asking the user to.
 
-## 1. Onboarding (run once, ~15-20 minutes)
+## 1. Setup interview (run once; about 15-25 minutes)
 
-Trigger: "set up my job search" / "run onboarding" / "let's get started".
+Trigger: "set up my job search", "run setup", "let's get started", or the first request in a
+folder where `profile/FACTS.md` does not exist yet.
 
-1. Ask for the user's current resume (they can paste it, upload it, or point to a file). If it's a
-   `.docx`, run `python scripts/extract_docx_text.py <path>` to get raw text; if it's a PDF or
-   plain text, read it directly.
-2. Save the resume file itself as `templates/resume_master.docx` (and a cover letter sample as
-   `templates/cover_letter_master.docx` if they have one). This stays untouched going forward — it
-   is the formatting source of truth for every future generated document, never rebuilt from
-   scratch.
-3. Run `python scripts/init_profile.py` to create `profile/FACTS.md`, `profile/STYLE.md`, and
-   `profile/SCORING.md` from their templates.
-4. Interview the user conversationally — do not dump a giant form at once. Cover, in roughly this
-   order:
-   - Work eligibility in whatever country/countries they're targeting (citizenship, visa/permit
-     status and expiry, sponsorship needs) — this alone eliminates a large share of postings and
-     must be accurate.
-   - Target roles, seniority level, and 2-3 real deal-breakers (e.g. remote-only, salary floor, no
-     relocation).
-   - Target locations/regions and remote preference, in priority order if they have one.
-   - Full work history with dates, titles, companies, and concrete accomplishments (numbers beat
-     adjectives).
-   - Skills, tools, certifications, languages.
-   - Education.
-   - Tone preferences for the writing: formal vs. conversational, anything their real resume
-     already does well that should be preserved.
-   - **What actually makes a posting a "yes" or a "no" for them** — this is the input for
-     `profile/SCORING.md`. Ask directly what matters most (role fit and location almost always
-     matter; ask what else does — comp, seniority, company size/stage, industry, etc.) and whether
-     there's a second, lower-priority track worth tracking too (e.g. "ideal role" + "acceptable
-     fallback role"), or just one track.
-5. Write everything into `profile/FACTS.md` (facts only), `profile/STYLE.md` (voice/tone only),
-   and `profile/SCORING.md` (turn what they said in the last bullet into 3-5 weighted criteria
-   summing to 100%, plus any hard red-flag rules they mentioned — see the template's prompts for
-   the shape). Read the scoring rubric back to them in particular; it's the thing that will do a
-   lot of invisible work later, worth a sanity check up front.
-6. Confirm `pipeline/jobs.xlsx` exists: `python scripts/pipeline.py init`.
+Ask in plain conversation, a few questions at a time. Never paste the whole list as a form.
+Before starting, ask one thing: **Basic or Full setup?** (Basic = everything works in chat.
+Full = adds the nightly scan, the morning agent and the dashboard; needs a paid Claude plan,
+the Claude desktop app on Windows, Python, and a computer that is on at night.) If they are
+not sure, start Basic: Full can be added later without redoing anything.
+
+### Step 1: create the files
+Run `python scripts/init_profile.py`. It creates, from the blank templates:
+`profile/FACTS.md`, `profile/STYLE.md`, `profile/SCORING.md`, `profile/SETTINGS.json`,
+`company_targets.csv` and `pipeline/jobs.xlsx`. Existing files are never overwritten.
+
+### Step 2: the resume
+- **They have one:** ask them to upload it (Word or PDF). For Word, run
+  `python scripts/extract_docx_text.py <file>`; read PDFs directly. Save the Word file as
+  `templates/resume_master.docx`; it is the layout every tailored resume is built on. If they
+  only have a PDF, build the master in Word from it and show it to them for approval.
+- **They don't have one:** interview them about their career, one role at a time, newest first:
+  title, company, dates, what they owned, and 2-4 results *with numbers* (ask "how much / how
+  many / how fast?" when they give an adjective). Then education, certifications, languages,
+  tools. Build a clean two-page Word resume from the answers and ask them to check every line.
+  Tell them plainly: a resume built from an interview is only as good as the answers.
+
+### Step 3: facts and voice
+Write `profile/FACTS.md` (facts only, nothing invented, every number as they said it) and
+`profile/STYLE.md` (tone: formal or conversational, words they like or dislike, anything their
+current resume already does well). Ask about anything that limits where they can work
+(work authorization, relocation, languages) and record it as stated. Never add it to documents
+unless they ask.
+
+### Step 4: what they are looking for -> `profile/SETTINGS.json`
+Cover, in this order, and write each answer into SETTINGS.json as you go:
+1. **Country.**
+2. **Tracks.** Their main target (Track A): the kind of role, the level, and 5-15 job titles
+   people actually use for it (suggest common variants they did not name, and let them choose).
+   Then ask if they want a second, fallback track (Track B), e.g. a step down in level or an
+   adjacent field. One track is fine.
+3. **Locations,** in priority order, each with a radius in km, plus whether remote counts and
+   how much they want it.
+4. **Title filter.** Suggest 10-20 words that mark titles clearly outside their field
+   (from their tracks) and let them edit the list.
+5. **Documents.** Any rule for every resume and cover letter ("always mention X",
+   "never use the word Y"). Store as `documents.standing_notes`.
+
+### Step 5: how a posting is scored -> `profile/SCORING.md` + `scoring.weights`
+Explain the default in one sentence: **Role fit 40, Location 25, Seniority 20, Type & pay 15**,
+with role fit weighted highest because a high location weight tends to push nearby jobs that are
+not a real fit above 60. Ask whether that matches how they decide, and adjust (weights must sum to
+100). Then ask: "What is an automatic no for you, however good the rest looks?" and write those as
+hard red flags in SCORING.md. Read the final rubric back to them.
+
+### Step 6: where to search -> `sources` (Full setup; in Basic, they paste postings)
+Offer the built-in sources and turn on the ones they want:
+- **Company career sites:** ask for 10-40 employers they would love to work for (suggest some from
+  their field and region). Write them to `company_targets.csv` with the careers-page URL; find the
+  URL by searching, and show the list for approval.
+- **Government of Canada Job Bank** (Canada only): which nights (default Monday and Thursday).
+- **Job-alert emails in Gmail** (Gmail only for now): help them set up alerts on job sites they
+  already use, then agree on a Gmail search that finds those emails (e.g. `from:` the alert
+  sender). Explain: alert emails carry only a title and a link, so the nightly description step
+  fills in the full posting before scoring.
+- **Anything else:** see section 6, "Add a search source".
+
+### Step 7: close the setup
+Summarise in a short list what was set up, what was left out, and the three things they can say
+next: "score this posting", "prepare my application for <job>", "prepare me for my interview at
+<company>". For Full setup, continue with the installation steps in the guide (scan, dashboard,
+scheduled tasks).
+
+### Changing settings later
+The user never edits files. "Widen the radius to 50 km", "add project manager titles",
+"stop searching Hamilton", "give location less weight": update SETTINGS.json (and SCORING.md when
+it is about scoring), read the change back in one line, and say when it takes effect (the next
+scan or the next scoring).
 
 ## 2. Finding jobs
 
-Trigger: "find jobs for me" / "check for new jobs" / "search <site/company> for openings".
-
-There's no bespoke scraper to run — search and browse live, the same way you'd help with any other
-research task, then log what you find:
-
-- **Text/API-based search:** use web search and page fetching for job boards and company career
-  pages that return real content without a login wall (most government job boards, most ATS
-  platforms' public listings pages, many company career pages).
-- **JavaScript-heavy or paginated pages:** if a fetch comes back as an empty shell or a loading
-  spinner, that page is client-rendered — switch to the Chrome extension tools (navigate + read
-  page text) to browse it the way a person would. This works for almost anything, including sites
-  that block plain HTTP fetches.
-- **Login-walled sites (most of LinkedIn, some Indeed/Glassdoor views):** only usable if the user
-  is already logged into that site in their own connected Chrome — ask before browsing anything
-  behind their personal login, same as the guardrail in section 7 below.
-
-For each relevant posting found, log it before moving to the next one:
-```bash
-python scripts/pipeline.py add-job --source "<site or company>" --title "<title>" \
-  --company "<company>" --location "<location>" --url "<job url>" --description "<full text if you have it>"
-```
-Grab the fullest description text available at add time — scoring needs real content, not just a
-title. If a listing page only shows a summary, open the actual posting page for the full text
-before adding it.
-
-**A search isn't done when you've found postings — it's done when everything found is scored.**
-"Find jobs" always means: search, then score everything new, as one continuous conversation — not
-two things the user has to ask for separately. If a site is clearly blocking automated access,
-say so plainly and move on rather than getting stuck.
-
-Keep searches to what a person would do in one focused sitting — a handful of sites/queries per
-request, not an unbounded crawl. If the user wants ongoing coverage of many sources, that's better
-served by running this skill repeatedly (or on a schedule, if the platform supports it) than by one
-enormous single search.
+- **Basic:** the user pastes a posting or a link; or, when asked, search live with web search and
+  page fetching (government job boards, company careers pages, applicant-tracking boards that
+  open without a login). Add each posting with
+  `python scripts/pipeline.py add-job --source "<site>" --title "<t>" --company "<c>" --location "<l>" --url "<u>" --description "<full text>"`,
+  then score it (section 3). A search is done only when everything found is scored.
+- **Full:** the nightly scan (`scripts/run_scan.py`, started by `scripts/nightly_scan.bat`) runs
+  every enabled source in SETTINGS.json; the morning agent adds jobs from alert emails, scores
+  everything new and refreshes the dashboard.
+- Never sign in to a site, and never browse behind the user's personal login, unless they ask for
+  that specific site in that moment. Sites the user wants scanned regularly go through section 6.
 
 ## 3. Scoring
 
@@ -149,11 +148,12 @@ not a bare gut-feel either:
 python scripts/pipeline.py list --status New
 ```
 For each one, read the job description against `profile/FACTS.md` and apply the weighted criteria
-and hard red-flag rules written into `profile/SCORING.md` during onboarding. Be honest — a 95
+(weights from `profile/SETTINGS.json` -> `scoring.weights`) and the hard red-flag rules written into
+`profile/SCORING.md` during setup. Be honest — a 95
 should mean "I would apply to this today," not "this is vaguely related." Write the score, track
 tag, and a per-criterion breakdown back:
 ```bash
-python scripts/pipeline.py score --url "<job url>" --score 87 --track A --note "Role 30/35, Location 40/40, Seniority 12/15, Type 10/10 = 92"
+python scripts/pipeline.py score --url "<job url>" --score 87 --track A --note "Role 34/40, Location 25/25, Seniority 16/20, Type 12/15 = 87"
 ```
 `--track` is optional if the user only defined one track in SCORING.md — drop it entirely in that
 case rather than forcing an artificial second track.
@@ -209,6 +209,11 @@ in the resume beats a synonym like "journey design" — use the posting's own te
 truthfully applicable per FACTS.md, don't just paraphrase.
 
 For each selected job:
+0. Run `python scripts/prepare_application.py context --url "<job url>"` when the job is in the
+   pipeline: it returns the description, the right template and its exact section headings,
+   FACTS.md, STYLE.md, the user's standing document rules (`standing_notes`, follow every one)
+   and the page limit (`resume_max_pages`). `prepare_application.py build` then fills the
+   templates and checks the page count. The manual steps below are the same flow by hand.
 1. Read the full job description (through the Qualifications/Requirements section — if the stored
    description looks cut off, ask the user to paste the full posting rather than drafting from a
    partial one) and `profile/FACTS.md` + `profile/STYLE.md`.
@@ -227,8 +232,9 @@ For each selected job:
      --content output/tmp_<company>_cl.json \
      --output "output/<Company>_<Role>_CoverLetter.docx"
    ```
-5. If the user wants a PDF and LibreOffice (`soffice`) is available in this environment, export
-   with it; otherwise the Word file is the deliverable.
+5. The Word file is the deliverable. Keep the resume within `documents.resume_max_pages` from
+   SETTINGS.json; if it runs over, shorten the least relevant bullets (older roles first), never
+   fonts or margins.
 6. Before calling it done, re-read the draft against the JD and confirm the terms identified in
    step 2 actually made it in somewhere reasonable. If one didn't fit naturally, say so rather than
    forcing it in or skipping it silently.
@@ -238,93 +244,67 @@ For each selected job:
    referral, record who: `python scripts/pipeline.py referral --url "<job url>" --name "<person>" --note "<how>"`.
 8. Delete temp JSON files. Confirm final file paths/names to the user and present the files.
 
-## 6. Watching specific companies
+## 6. Add a search source
 
-Trigger: "keep an eye on <company>" / "check <company>'s careers page".
+Trigger: "add <site> to my search", "also look at <url>", "watch <company>".
 
-Not every relevant employer posts to the big job boards. When the user names a company to watch,
-note it (a simple running list is enough — a text file or a note in conversation), and when asked
-to check it, browse its careers page the same way as section 2. Many companies use a handful of
-common applicant-tracking platforms with public, fetchable job listings — if a plain fetch of the
-careers page returns nothing useful, check whether the company uses one of those before falling
-back to the Chrome extension.
+1. **A company's own careers page:** add a row to `company_targets.csv` (name, careers URL,
+   location). Run `python scripts/scan_companies.py --only "<name>"` once to confirm postings are
+   read; if the page needs a browser, say so and set `how` accordingly.
+2. **Any other site (job board, association board, RSS feed):** before adding it, tell the user
+   once, plainly: "You're responsible for checking that this site's terms of use allow automated
+   reading. Many large job sites do not." Add it only after they confirm, as an entry in
+   `sources.extra` with `name`, `url`, `how` (`rss`, `html_list` or `browser`),
+   `added_on` and `terms_checked_by_user: true`. Write or adapt the small reader script it needs
+   in `scripts/sources/`, run it once, and show the user what it found.
+3. Read back in one line what was added and when it will first run.
+4. Removing a source: set `enabled: false` or delete the entry; never delete jobs already found.
 
-## 7. Finding and reaching out to a contact at a company — use sparingly, real account risk
+## 7. Interview preparation
 
-Trigger: only when the user explicitly asks, e.g. "do I know anyone at this company." **Never do
-this automatically as part of a regular search.**
+Trigger: "prepare me for my interview at <company>", "let's practise", or a kit request from the
+dashboard (the sync agent follows `agents/sync_agent.md`).
 
-If the user has the Chrome extension connected and is logged into LinkedIn (or another network) in
-their own browser, you can browse it live the way they would — check a posting for a "connections
-work here" signal, or search the company's people. This is genuinely useful (it's what a person
-would do manually before applying) but it is also exactly the kind of automated profile/search
-browsing that a platform's abuse detection is built to catch. Guardrails, don't work around them:
-- Only for postings already `Shortlisted` — a handful, not everything found.
-- A handful of lookups per request (5 or fewer), not a batch job.
-- Space lookups out in the conversation rather than firing them off back to back.
-- Always ask before browsing anything behind the user's personal login.
+1. Context: `python scripts/prepare_application.py context --url "<job url>"` (or the posting the
+   user pastes), plus the resume and cover letter that were actually sent if they exist.
+2. Research with web search: what the company does, size, leadership, recent news with dates
+   (last ~6 months), where the role sits, and what employees say. At least two independent sources;
+   mark company-reported figures as such; never invent a number. Interviewers: public pages only.
+3. Deliver: a short research brief tied to the posting; 12-15 likely questions, each with a
+   spoken-style answer of 80-150 words built ONLY from FACTS.md at its exact scope (STAR where it
+   fits) and a one-line tip; always include "tell me about yourself", "why this role", the hardest
+   gap between the user and the posting (answered honestly, bridging to what they have), seniority
+   fit, and the posting's own success criteria; 5-6 sharp questions to ask them; a thank-you email
+   draft with [placeholders].
+4. Practice mode: ask one question at a time, wait for the answer, then rate it 1-10 with two
+   things that worked, two to improve, and a stronger version in the user's own facts.
+5. After the interview: offer to log the round and a summary (dashboard "Interview happened" or
+   `pipeline.py status ... --status Interviewing`) and draft the thank-you note. Never send it.
 
-Record what's found: `python scripts/pipeline.py contact --url "<job url>" --contact-url "<profile url>" --note "..."`.
+## 8. Full setup (Claude-led)
 
-### Outreach message to a found contact — standing template
-
-Once a contact is found for a shortlisted posting and the user wants to reach out, draft one tight
-paragraph — no bullet points, this is a direct message, not a cover letter:
-
-1. **State interest explicitly, up front.** "I came across the `<title>` opening at `<company>`
-   and I'm genuinely interested in applying — wanted to reach out directly before I do." Don't
-   leave interest in the role implied.
-2. **1-2 lines of real, relevant background** pulled from `profile/FACTS.md` — only the pieces
-   that map to this specific posting, not a résumé recap.
-3. **A researched hook** — something concrete and recent about the company (a product launch,
-   partnership, expansion, funding round — not generic "I admire your company" filler), connected
-   to a real challenge the role would plausibly touch, with a light, optional offer to share
-   thoughts — never an unsolicited essay.
-4. **A soft ask** — a quick chat about the team/role, or a pointer to whoever's leading the search.
-   Never a hard "can you refer me."
-5. **Warm, brief close.**
-
-**Recording it:** sending this message is a real pipeline event even before a formal application
-goes in. Always confirm with the user that it was actually sent before recording it — never record
-from the draft alone:
-```bash
-python scripts/pipeline.py outreach --url "<job url>" --contact-name "<name>" --note "Reached out via <platform> to <name> -- expressed interest in applying, included research-based talking points on <topic>. Not yet submitted a resume through the normal application channel."
-```
-This sets its own follow-up clock (shorter than the Applied one, since a direct message is a
-lighter, faster-cycle ask), writes the note, and auto-bumps status to Shortlisted if it's still
-New/Scored. `pipeline.py summary` surfaces it again automatically once the follow-up window has
-passed with no reply — mention it, offer to draft a polite nudge, never send anything unprompted.
-
-## 8. Full job processing — one-command workflow
-
-Trigger: the user gives a job URL and says "process this job" / "do everything for this one."
-Run the whole sequence below without asking the user to request each step separately — but stop at
-drafts, every time. **Nothing gets sent, submitted, or marked Applied without an explicit
-go-ahead from the user in that moment** — this is a hard rule, not a preference, and cannot be
-pre-authorized by how the request is phrased.
-
-1. **Track it** (`add-job`, skip if already tracked).
-2. **Get the full description** if missing — open the posting page directly (section 2's approach)
-   rather than scoring from a thin summary.
-3. **Score it** against FACTS.md/SCORING.md, full weighted breakdown in the note, track assigned.
-4. **Draft a tailored resume and cover letter** per section 5. Save as new files, clearly drafts.
-   Never overwrite an existing draft for the same posting without asking first.
-5. **Look for a contact**, only if the posting is (or is about to be) Shortlisted — same guardrails
-   as section 7.
-6. **Present everything together** — score, note, resume/cover letter drafts, any contact found —
-   and stop. Ask before finalizing/overwriting any file, before drafting an outreach message, and
-   always before actually sending anything or marking the posting Applied.
-
-## 9. Ad hoc conversation
-
-Once set up, the user should mostly just talk: "I have an interview tomorrow with Acme", "mark the
-Wayfair one as rejected", "what's left to review this week". Use `pipeline.py` to read/update state
-and answer in plain language — don't make the user open the spreadsheet unless they want to.
+Follow GUIDE.md chapter 3. In short, with the user's computer folder connected:
+1. [You] Python 3.10+ installed with "Add python.exe to PATH". [Claude] run `install.bat` in the
+   project folder (creates .venv, installs the libraries and the scanners' browser, creates the files).
+2. [Claude] Setup interview (section 1) including sources; build `company_targets.csv`.
+3. [Claude] Test: `.venv\Scripts\python.exe scripts\run_scan.py` once, show what it found.
+4. [Claude] Schedule the scan: `scripts\install_nightly_scan.bat <HH:MM>`; tell the user how to tick
+   "Wake the computer to run this task" if they want it.
+5. [You] Connect Gmail to Claude if they want job-alert emails or employer replies.
+6. [Claude] Create the dashboard: copy `dashboard/job-search-hub.template.html`, fill
+   `{{PROJECT_DIR_JS}}` (the project path with doubled backslashes and a trailing backslash),
+   publish it as a private artifact with the capabilities db, sample, and mcp
+   (server "Claude Code Remote", tool update_trigger).
+7. [Claude] Create the two scheduled tasks from `agents/`: the sync task (no schedule; the page
+   books it) and the morning task (weekdays, about an hour after the scan). Fill the placeholders,
+   then put the sync task's id into the dashboard's `{{SYNC_TRIGGER_ID}}` and republish. [You]
+   approve each task when asked.
+8. [Claude] First run: press Refresh on the dashboard together, check the board fills in, and
+   explain the home page in two sentences.
 
 ## Privacy
 
-Everything under `profile/`, `templates/`, `pipeline/`, and `output/` (once filled in) is the
-user's personal data — resume content, contact info, application history. It stays local to their
-own Claude/Cowork session and files; this skill has no server component and sends the user's data
-nowhere except the job sites/pages Claude browses on their behalf while searching. If the user
-wants to reuse this profile in a fresh session, they just need to keep those folders around.
+Everything under `profile/`, `templates/`, `pipeline/` and `output/` is the user's personal data.
+It stays in their own files and their own Claude account; this project has no server and sends
+nothing anywhere except the job pages Claude reads while searching. The dashboard is a private
+artifact that only the user can open unless they share it.

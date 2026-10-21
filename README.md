@@ -1,65 +1,65 @@
-# job-search-copilot
+# Job Search Copilot
 
-A free [Claude](https://claude.ai) skill that scores job postings against your real profile,
-tracks everything in one spreadsheet, and drafts tailored resumes and cover letters — inside a
-chat, no install, no terminal, no coding.
+Turn Claude into a job-search assistant: it scores job postings against your real background,
+writes a tailored resume and cover letter for the ones you choose, and prepares you for
+interviews. In the full setup it also searches for new jobs every night and shows everything
+on a personal dashboard.
 
-**It doesn't invent facts.** One file (`profile/FACTS.md`) holds everything true about you.
-A second file (`profile/STYLE.md`) holds how you write it up. A third (`profile/SCORING.md`) holds
-your own scoring rubric. Every generated document and every score is built only from those.
+Built by a job seeker with no coding background, in conversation with Claude. Free to use.
 
-## Install — one step
+![The dashboard home page (demo data, made-up candidate)](docs/images/01-home.png)
 
-1. Download [`job-search-copilot.skill`](./job-search-copilot.skill) from this repo.
-2. In [Claude, Cowork mode](https://claude.ai), drag the file in — a **Save skill** button
-   appears. Click it.
-3. Say **"set up my job search."** That's it.
+> **The iron rule.** It prepares; you decide and act. It never sends, submits, applies, posts or
+> messages anyone for you. Every application and message is a draft you review and send
+> yourself. It never invents facts about you.
 
-No Python, no virtual environment, no API key beyond the Claude session you're already in.
+## Two levels
 
-## What it does
+| | Basic | Full |
+|---|---|---|
+| Score postings, tailored resume and cover letter, interview prep, job tracker | ✓ | ✓ |
+| Nightly job search, morning summary, personal dashboard | | ✓ |
+| Claude plan | Any, including Free | Paid (Pro or higher) |
+| Computer | Any | **Windows only**, Python, on at night |
+| Email | Not needed | **Gmail only** |
 
-- Scores every posting 0–100 against a profile built from your real resume plus a short interview
-  — role fit, location, seniority, and whatever else matters most to you, weighted the way you
-  actually think about it.
-- Tracks everything in one Excel workbook Claude creates and updates for you.
-- Drafts tailored resumes and cover letters, filled into your own real resume file — never built
-  from scratch, never inventing experience you don't have.
-- Tracks follow-ups automatically on applications and outreach messages.
-- Never sends or submits anything without asking you first.
+## Get started
 
-See [`SKILL.md`](./SKILL.md) for the full, exact instructions Claude follows — it's plain
-markdown, worth a skim if you want to know precisely what it will and won't do.
+1. In Claude, turn on **Settings > Capabilities > Code execution and file creation**.
+2. Download [`job-search-copilot-skill.zip`](job-search-copilot-skill.zip) and upload it in
+   **Customize > Skills > + > Create skill > Upload a skill**.
+3. Start a new chat, attach [`GUIDE.md`](GUIDE.md) (or [the PDF](Job-Search-Copilot-Guide.pdf)),
+   and say: *"Read this guide and set up Job Search Copilot for me, step by step."*
 
-## Repo layout
+Claude leads from there and stops whenever a step needs you. The full guide is in
+[GUIDE.md](GUIDE.md).
 
-```
-SKILL.md                    # what Claude reads to run this skill
-job-search-copilot.skill    # the installable package (zip of everything below + SKILL.md)
-profile/
-  FACTS.template.md         # blank template — your filled FACTS.md stays in your own session
-  STYLE.template.md         # blank template
-  SCORING.template.md       # blank template
-scripts/                    # pipeline tracking + resume/cover-letter generation (pure Python,
-                             # runs in Claude's built-in sandbox, no install needed)
-```
+## What's in this repository
+
+| Path | What it is |
+|---|---|
+| `GUIDE.md`, `Job-Search-Copilot-Guide.pdf` | The complete guide |
+| `job-search-copilot-skill.zip` | The skill to upload to Claude (built from the files below) |
+| `SKILL.md` | The skill's instructions |
+| `profile/` | Blank templates the setup interview fills in |
+| `scripts/` | The scan, scoring queue, tracker and document scripts (Python) |
+| `agents/` | Prompts for the two scheduled tasks (Full setup) |
+| `dashboard/` | The dashboard page template (Full setup) |
+| `templates/examples/` | Example resume and cover letter for a made-up candidate |
+| `docs/images/` | Screenshots (demo data) |
+
+## Search sources
+
+Built in: company career sites you choose, the Government of Canada Job Bank, and job-alert
+emails in Gmail. You can ask Claude to add any other site; you are responsible for checking
+that the site's terms of use allow automated reading.
 
 ## Privacy
 
-This has no server and no account of its own. Your resume, job list, and messages live only in
-your own Claude session and files — nothing is sent anywhere except the job pages Claude browses
-on your behalf while searching, at your request.
-
-## Good to know
-
-- This is a research and drafting assistant, not an auto-apply bot. You review and send everything
-  yourself.
-- Job "scanning" happens live, in conversation — Claude searches and browses on request rather than
-  running a scheduled background scraper. Great for focused sessions; not built for unattended
-  24/7 monitoring.
-- Sites that require your personal login (most of LinkedIn, for example) can only be browsed if
-  you're already logged in on your own connected browser, and only when you explicitly ask.
+Your profile, resume, job list and documents stay in your own folder and in your own Claude
+account. Nothing is sent to the author of this project. The `.gitignore` keeps personal files
+out of any copy you publish.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT. See [LICENSE](LICENSE).

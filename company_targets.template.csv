@@ -1,0 +1,3 @@
+company,city,tier,career_url,ats_type,notes,paused
+Example Company (Greenhouse),Your City,1,https://boards.greenhouse.io/examplecompany,greenhouse,"EXAMPLE ROW - Claude replaces these during setup with employers you choose.",yes
+Example Company (company site),Your City,2,https://www.example.com/careers,generic,"EXAMPLE ROW - generic pages are read best-effort.",yes
