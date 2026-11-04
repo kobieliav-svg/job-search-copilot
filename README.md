@@ -2,8 +2,8 @@
 
 Turn Claude into a job-search assistant: it scores job postings against your real background,
 writes a tailored resume and cover letter for the ones you choose, and prepares you for
-interviews. In the full setup it also searches for new jobs every night and shows everything
-on a personal dashboard.
+interviews. In the full setup it also searches for new jobs every night, keeps track of your
+network and the recruiting agencies you work with, and shows everything on a personal dashboard.
 
 Built by a job seeker with no coding background, in conversation with Claude. Free to use.
 
@@ -19,6 +19,7 @@ Built by a job seeker with no coding background, in conversation with Claude. Fr
 |---|---|---|
 | Score postings, tailored resume and cover letter, interview prep, job tracker | ✓ | ✓ |
 | Nightly job search, morning summary, personal dashboard | | ✓ |
+| Networking hub and recruiting-agency tracker, with message drafts | | ✓ |
 | Claude plan | Any, including Free | Paid (Pro or higher) |
 | Computer | Any | **Windows only**, Python, on at night |
 | Email | Not needed | **Gmail only** |

@@ -293,6 +293,10 @@ Follow GUIDE.md chapter 3. In short, with the user's computer folder connected:
 5. [You] Connect Gmail to Claude if they want job-alert emails or employer replies.
 6. [Claude] Create the dashboard: copy `dashboard/job-search-hub.template.html`, fill
    `{{PROJECT_DIR_JS}}` (the project path with doubled backslashes and a trailing backslash),
+   `{{USER_NAME_JS}}` (the user's name as a JavaScript string, e.g. `"Alex Morgan"`) and
+   `{{USER_FACTS_JS}}` (a JavaScript string of 80-150 words built ONLY from profile/FACTS.md:
+   current title and years, 3-5 achievements with their exact numbers, target roles, locations,
+   availability; the networking and agency message writer may use nothing else),
    publish it as a private artifact with the capabilities db, sample, and mcp
    (server "Claude Code Remote", tool update_trigger).
 7. [Claude] Create the two scheduled tasks from `agents/`: the sync task (no schedule; the page

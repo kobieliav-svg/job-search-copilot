@@ -55,6 +55,10 @@ button:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visib
 .tile .num { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.4rem, 3vw, 1.9rem); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .tile .lbl { color: var(--muted); font-size: 0.88rem; overflow-wrap: anywhere; }
 .tile.empty .num { color: var(--line); }
+.tile.click { cursor: pointer; }
+.tile.click:hover { background: var(--surface-2); }
+.tile.click:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile.on { box-shadow: inset 0 -3px 0 var(--accent); background: var(--accent-soft); }
 @media (max-width: 720px) { .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .meta { color: var(--muted); font-size: 0.88rem; margin: 0; }
 
@@ -79,6 +83,7 @@ button.go:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .alerts { display: flex; flex-direction: column; gap: 6px; }
 .alert { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; }
+#scanwarn { margin-bottom: 10px; font-weight: 500; }
 
 .board-wrap { overflow-x: auto; padding-bottom: 6px; }
 .board { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 12px; min-width: 0; }
@@ -371,7 +376,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     </div>
     <nav class="nav" id="nav" aria-label="Main">
       <button class="nav-tg" id="nav-tg" type="button" aria-expanded="false" aria-controls="nav-items"><span aria-hidden="true">&#9776;</span> <span id="nav-cur"></span></button>
-      <div class="nav-items" id="nav-items"><button class="nav-i" id="btn-board" type="button" data-v="board"></button><button class="nav-i" id="btn-ct" type="button" data-v="ct"></button><button class="nav-i" id="btn-co" type="button" data-v="co"></button><button class="nav-i" id="btn-iv" type="button" data-v="iv"></button><button class="nav-i" id="btn-ppl" type="button" data-v="log"></button></div>
+      <div class="nav-items" id="nav-items"><button class="nav-i" id="btn-board" type="button" data-v="board"></button><button class="nav-i" id="btn-ct" type="button" data-v="ct"></button><button class="nav-i" id="btn-ag" type="button" data-v="ag"></button><button class="nav-i" id="btn-co" type="button" data-v="co"></button><button class="nav-i" id="btn-iv" type="button" data-v="iv"></button><button class="nav-i" id="btn-ppl" type="button" data-v="log"></button></div>
     </nav>
     <p class="sub" id="t-sub" hidden></p>
   </header>
@@ -381,8 +386,10 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
   <section class="jobview" id="pplview" hidden></section>
   <section class="jobview" id="ivview" hidden></section>
   <section class="jobview" id="ctview" hidden></section>
+  <section class="jobview" id="agview" hidden></section>
   <div id="chatroot"></div>
 
+  <div class="alert" id="scanwarn" hidden role="status"></div>
   <section class="morning" id="morning" hidden aria-live="polite"></section>
 
   <section aria-labelledby="h-strip" id="sec-strip" class="panel acc">
@@ -446,7 +453,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
         unknown: "unknown"
       },
       noState: "No data loaded yet. Click \"Refresh from jobs file\" to load it.",
-      fu: { h: "Follow-ups and to-dos", none: "nothing urgent", count: function (n) { return n === 1 ? "1 item" : n + " items"; }, empty: "Nothing needs your attention right now.",
+      fu: { jobSt: function (x) { return "Job: " + x; }, h: "Follow-ups and to-dos", none: "nothing urgent", count: function (n) { return n === 1 ? "1 item" : n + " items"; }, empty: "Nothing needs your attention right now.",
         iv: "Interview", ivText: function (t, c, d) { return t + " · " + c + " - " + d; }, follow: "Follow up", decide: "Decide", app: "No answer yet",
         appText: function (t, c, d) { return t + " · " + c + (d ? " - applied " + d : ""); }, send: "Ready to send", sendText: function (t, c) { return t + " · " + c + " - documents are ready"; },
         nApps: function (n) { return n + " applications sent 10+ days ago with no answer yet - consider a follow-up"; }, nSend: function (n) { return n === 1 ? "1 job with documents ready to send" : n + " jobs with documents ready to send"; } },
@@ -459,8 +466,10 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
       workingNote: "Changes are written to the file and the board updates when the run ends. You can close the page.",
       finished: function (t) { return "Agent finished " + t + "."; },
       alert: function (title, st, msg) { return "Moving \"" + title + "\" to " + st + " was not saved: " + msg; },
-      aJob: "job", unknownErr: "unknown error",
+      aJob: "job", unknownErr: "unknown error", scanWarn: function (n, t) { return "LinkedIn problem in last night's scan: " + n + " of " + t + " LinkedIn searches came back empty, so no new LinkedIn jobs were added. Usually the scanner's LinkedIn sign-in expired (run scripts\\login.py linkedin) or LinkedIn changed its page - ask Claude to check."; },
       noScore: "No score", pending: function (st) { return "Pending: " + st; },
+      fewApps: function (n) { return n + " applicants"; }, fewAppsTip: "Fewer than 20 people had applied when the posting was read (+5 to the score).",
+      titleOnly: "Title only", titleOnlyTip: "Scored from the title, company and location only (the posting could not be read). Open the posting before deciding.",
       noDesc: "No description", followUp: "Follow up", untitled: "Untitled job",
       contact: "Contact: ", details: "Details", appliedOn: "Applied: ", found: "Found: ", openJob: "Open the job posting",
       interested: "Interested", notRelevant: "Not relevant", confirmArchive: "Confirm? Moves to archive",
@@ -471,7 +480,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
       minScore: function (n, m) { return n + " · score " + m + "+"; },
       showAll: function (n) { return "Show all " + n; }, showFewer: "Show fewer",
       mTitle: function (d) { return "This morning · " + d; },
-      mCounts: function (o) { return o.new_found + " new jobs found · " + o.scored + " scored · " + o.qualifying + " at 60+ still waiting for you · " + o.no_description + " without a description"; },
+      mCounts: function (o) { return o.new_found + " new jobs found · " + o.scored + " scored · " + o.qualifying + " at 60+ still waiting for you · " + o.no_description + " scored by title only (posting could not be read)"; },
       mTop: "Worth a look: ", mReplies: "Replies from companies: ", mAsk: "Needs your decision: ", mNoScan: "The night scan did not run or did not finish: ", mClose: "Hide until tomorrow's summary",
       beforeFirst: "Cards appear after the first refresh.", emptyCol: "No jobs at this stage.", emptyNew: "No new jobs scored 60 or higher.",
       co: {
@@ -552,6 +561,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
           stuck: "The agent did not finish in time. Your computer may be off or asleep. You can try again." },
         readyAt: function (t) { return "Prepared " + t; }, ivOn: function (d, t) { return "Interview " + d + (t ? " · " + t : ""); },
         names: "Interviewer names (optional, comma separated)", namesPh: "e.g. Jane Smith, Head of HR",
+        deep: { business: "How they make money", market: "The market", competitors: "Competitors", finance: "Ownership and finances", news: "Last 12 months", opps: "Opportunities", risks: "Challenges", problems: "What this role will be asked to solve", angles: "Your angles" },
         resH: "Company research", stage: "Where you are", roleH: "The role", ivH: "Interviewers", srcH: "Sources",
         qH: "Likely questions", showA: "Show answer", hideA: "Hide answer", tip: "Tip: ",
         practice: "Practice mode", stopPractice: "Show all questions", next: "Next question", prev: "Previous",
@@ -578,14 +588,52 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
         voiceReady: "The answer box is ready. Now press the Windows key + H together and speak (press them again to stop). On a phone, tap the microphone on the keyboard.",
         rateErr: "Could not rate the answer right now. Try again in a minute.", rateOff: "Rating is not available here (it works when the page is open inside Claude and you allow it).", needAns: "Write or dictate your answer first."
       },
-      nav: { board: "Job board", iv: "Interview prep", log: "Activity log", ct: "Contacts", co: "Companies", menu: "Menu" },
+      nav: { board: "Job board", iv: "Interview prep", log: "Activity log", ct: "Networking", ag: "Agencies", co: "Companies", menu: "Menu" },
       ct: {
-        title: "Contacts", intro: "The people in your job search: who they are, where they work or what company they connect you to, and how to reach them. Add notes over time; everything you logged with a person shows here too.",
+        title: "Networking", intro: "Everyone in your job-search network in one place: the people you add yourself, with every email, WhatsApp, call and meeting you log. Messages waiting for you, the weekly numbers and local networking events are at the top.",
         addH: "Add a contact", editH: "Edit contact", name: "Name", company: "Company (works at or connected to)", role: "Title or relationship", email: "Email", phone: "Phone", linkedin: "LinkedIn profile link", note: "Note",
         save: "Save", cancel: "Cancel", needName: "Enter the name.", saved: "Saved.", sug: "People from your activity log, not yet in contacts:", sugH: "Suggested from your activity log", sugAdd: function (n) { return "+ " + n; },
         search: "Search name, company or note", none: "No contacts yet.", noMatch: "No contacts match.", count: function (n) { return n + " contacts"; },
         edit: "Edit", remove: "Remove", removeQ: "Remove this contact?", yes: "Yes, remove", addNote: "Add a note", notePh: "Your note", noteSave: "Save note",
         acts: function (n) { return n === 1 ? "1 logged action" : n + " logged actions"; }, nNotes: function (n) { return n === 1 ? "1 note" : n + " notes"; }, at: "at ", err: function (c) { return "Could not save (code: " + c + ")."; }
+      },
+      ag: {
+        title: "Recruiting agencies", intro: "The agencies you work with: who to contact, the jobs they posted in your search, messages ready to send and where each one stands. Nothing is sent for you; copy the message, send it yourself, then mark it here.",
+        w: { agencies: "Agencies", contacted: "Contacted", registered: "Registered", people: "Recruiters found", sent: "Messages sent", replied: "Replies" },
+        st: { to_contact: "Not contacted yet", contacted: "Contacted", registered: "Registered", active: "Working with you", paused: "Paused" },
+        cst: { to_contact: "Not contacted", sent: "Message sent", replied: "Replied", call: "Call held", active: "Working with you", no_answer: "No answer" },
+        kinds: { connect: "LinkedIn invite note", message: "LinkedIn message", email: "Email", followup: "Follow-up" },
+        btn: { sent: "I sent it", replied: "Got a reply", call: "Call held", no_answer: "No answer" },
+        ev: { sent: "Message sent", replied: "Got a reply", call: "Call held", no_answer: "No answer" },
+        counts: function (n, s, r) { return (n === 1 ? "1 person" : n + " people") + " · " + s + " contacted · " + r + " replied"; },
+        registered: "Registered", regL: "I registered on their site / sent my resume", statusL: "Status", site: "Website", next: "Follow up: ",
+        jobsH: function (n) { return "Their jobs in your search (" + n + ")"; }, teamH: "Message to the general inbox", peopleH: function (n) { return "Recruiters (" + n + ")"; },
+        find: "Find recruiters", findQueued: "Saved. The morning run will look for recruiters and add them here.", findWait: "Waiting for the morning run to find recruiters (LinkedIn and published emails only).", findDone: function (d) { return "Search done " + d + "."; },
+        addAg: "+ Add an agency", f: { name: "Agency name", url: "Website", city: "City", focus: "Focus (e.g. executive search)", domain: "Email domain (e.g. randstad.ca)" },
+        exists: "This agency is already on the list.", addedByYou: "Added by you", indep: "Independent recruiter (from your LinkedIn agent)", fromAgent: "Your LinkedIn agent", inbox: "General inbox",
+        showing: function (x) { return "Showing: " + x; }, showAll: "Show everything",
+        fv: { _contacted: "agencies you contacted", _registered: "agencies you registered with" }, pv: { all: "all recruiters", sent: "recruiters you messaged", replied: "recruiters who replied" },
+        addC: "Add a recruiter", editC: "Edit recruiter", dueH: "Follow-ups due", dueWhy: "No reply yet, follow up since ", open: "Open", search: "Search agency, focus or recruiter"
+      },
+      net: {
+        weekH: function (d) { return "This week (from " + d + ")"; },
+        w: { reached: "Reached out", accepted: "Accepted", replies: "Replies", meetings: "Meetings", referrals: "Referrals" },
+        dueH: "Messages waiting for you", noneDue: "Nothing to send right now.", eventsH: "Networking events near you", noEvents: "No upcoming events saved yet; the morning run refreshes this list every Monday.",
+        evUpdated: function (d) { return "List updated " + d + "."; }, register: "Details and registration", fit: { high: "Strong fit", medium: "Good fit", low: "General networking" },
+        k: { agent: "Drafted by your LinkedIn agent", thanks: "Thank-you after your meeting", touch: "Time to stay in touch", bday: "Birthday", holiday: "Holiday: ", occasion: "Occasion: " },
+        draft: "Write the message", redo: "Write again", drafting: "Writing...", markSent: "I sent it", email: "Email", noAi: "Message writing is not available on this page right now.",
+        draftErr: "The message could not be written; try again.", marked: "Marked as sent.", sentNote: function (k) { return "Sent: " + k; },
+        wkv: { wk_reached: "people you reached out to this week", wk_accepted: "people who accepted this week", wk_replies: "people who replied this week", wk_meetings: "meetings this week", wk_referrals: "referrals this week" },
+        wkNote: "The list shows people with activity since Monday. The number in the tile comes from your LinkedIn agent's weekly count, so it can differ slightly.",
+        all: "All", referShort: "Can refer", from: "From: ", nextTouch: "Next touch: ", meetingsH: "Meetings", update: "Add an update",
+        st: { reached: "Reached out", connected: "Connected", replied: "Replied", meeting_set: "Meeting set", met: "Met", followup: "Follow up", longterm: "Long-term contact", closed: "Closed" },
+        str: { strong: "Strong", good: "Good", weak: "Weak" },
+        hol: { none: "No holiday messages", canadian: "Canadian holidays", jewish: "Jewish holidays", both: "Both" },
+        kinds: { sent: "Message sent", reply: "Got a reply", meeting_set: "Meeting set", meeting: "Meeting held", note: "Note" },
+        ch: { linkedin: "LinkedIn", email: "Email", whatsapp: "WhatsApp", phone: "Phone", inperson: "In person", other: "Other" },
+        f: { stage: "Status", strength: "Relationship", holidays: "Holiday messages", birthday: "Birthday (MM-DD)", next: "Next touch", persona: "How to talk to them", personaPh: "e.g. formal, ex-colleague, likes AI topics",
+             refer: "Can refer me / open to help", what: "What happened", channel: "Channel", days: "Follow up in (days)", textPh: "Details (for a meeting: a short summary)" },
+        bdayFmt: "Birthday format: MM-DD, for example 03-14."
       },
       cod: { details: "Details", hide: "Hide details", website: "Website", industry: "Industry", contact: "Main contact", none: "-", note: "Note", save: "Save", saved: "Saved.",
         people: "Your contacts here: ", addNote: "Add a note", notePh: "Your note", noteSave: "Save note", contactShort: "Contact: " },
@@ -627,7 +675,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
         save: function (c) { return "לא הצלחתי לשמור את השינוי (קוד: " + c + ")."; },
         unknown: "לא ידוע"
       },
-      fu: { h: "מעקבים ומשימות", none: "אין משהו דחוף", count: function (n) { return n === 1 ? "פריט אחד" : n + " פריטים"; }, empty: "אין כרגע משהו שדורש את תשומת ליבך.",
+      fu: { jobSt: function (x) { return "המשרה: " + x; }, h: "מעקבים ומשימות", none: "אין משהו דחוף", count: function (n) { return n === 1 ? "פריט אחד" : n + " פריטים"; }, empty: "אין כרגע משהו שדורש את תשומת ליבך.",
         iv: "ראיון", ivText: function (t, c, d) { return t + " · " + c + " - " + d; }, follow: "לחזור אליו", decide: "להחליט", app: "עוד אין תשובה",
         appText: function (t, c, d) { return t + " · " + c + (d ? " - הוגש " + d : ""); }, send: "מוכן לשליחה", sendText: function (t, c) { return t + " · " + c + " - המסמכים מוכנים"; },
         nApps: function (n) { return n + " מועמדויות שנשלחו לפני יותר מ־10 ימים ועוד אין תשובה - כדאי לשקול מעקב"; }, nSend: function (n) { return n === 1 ? "משרה אחת שהמסמכים שלה מוכנים לשליחה" : n + " משרות שהמסמכים שלהן מוכנים לשליחה"; } },
@@ -641,8 +689,10 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
       workingNote: "השינויים נרשמים בקובץ והלוח מתעדכן בסוף הריצה. אפשר לסגור את הדף.",
       finished: function (t) { return "הסוכן סיים " + t + "."; },
       alert: function (title, st, msg) { return "השינוי של \"" + title + "\" ל" + st + " לא נרשם: " + msg; },
-      aJob: "משרה", unknownErr: "שגיאה לא ידועה",
+      aJob: "משרה", unknownErr: "שגיאה לא ידועה", scanWarn: function (n, t) { return "תקלה בלינקדאין בסריקת הלילה: " + n + " מתוך " + t + " חיפושים בלינקדאין חזרו ריקים, ולכן לא נוספו משרות חדשות מלינקדאין. בדרך כלל ההתחברות של הסורק פגה (מריצים מחדש את ההתחברות: scripts\\login.py linkedin) או שלינקדאין שינה את הדף. כדאי לבקש מקלוד לבדוק."; },
       noScore: "ללא ציון", pending: function (st) { return "ממתין לעדכון: " + st; },
+      fewApps: function (n) { return n + " מגישים"; }, fewAppsTip: "פחות מ-20 אנשים הגישו מועמדות כשהמודעה נקראה (5 נקודות בונוס לציון).",
+      titleOnly: "לפי כותרת", titleOnlyTip: "הציון ניתן רק לפי הכותרת, החברה והמיקום, כי לא ניתן היה לקרוא את המודעה. כדאי לפתוח את המודעה לפני שמחליטים.",
       noDesc: "חסר תיאור", followUp: "לחזור לחברה", untitled: "משרה ללא כותרת",
       contact: "קשר: ", details: "פרטים", appliedOn: "הוגש: ", found: "נמצא: ", openJob: "פתח את המשרה",
       interested: "מעניין אותי", notRelevant: "לא רלוונטי", confirmArchive: "לאשר? יועבר לארכיון",
@@ -653,7 +703,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
       minScore: function (n, m) { return n + " · ציון " + m + "+"; },
       showAll: function (n) { return "הצג את כל ה-" + n; }, showFewer: "הצג פחות",
       mTitle: function (d) { return "הבוקר · " + d; },
-      mCounts: function (o) { return o.new_found + " משרות חדשות נמצאו · " + o.scored + " קיבלו ציון · " + o.qualifying + " עם 60 ומעלה שעוד מחכות לך · " + o.no_description + " בלי תיאור"; },
+      mCounts: function (o) { return o.new_found + " משרות חדשות נמצאו · " + o.scored + " קיבלו ציון · " + o.qualifying + " עם 60 ומעלה שעוד מחכות לך · " + o.no_description + " קיבלו ציון לפי כותרת בלבד (לא ניתן היה לקרוא את המודעה)"; },
       mTop: "שווה לבדוק: ", mReplies: "תשובות מחברות: ", mAsk: "צריך את ההחלטה שלך: ", mNoScan: "הסריקה הלילית לא רצה או לא הסתיימה: ", mClose: "הסתר עד הסיכום של מחר",
       beforeFirst: "הכרטיסים יופיעו אחרי הרענון הראשון.", emptyCol: "אין משרות בשלב הזה.", emptyNew: "אין משרות חדשות עם ציון 60 ומעלה.",
       co: {
@@ -734,6 +784,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
           stuck: "הסוכן לא סיים בזמן. ייתכן שהמחשב כבוי או במצב שינה. אפשר לנסות שוב." },
         readyAt: function (t) { return "הוכנה " + t; }, ivOn: function (d, t) { return "ראיון " + d + (t ? " · " + t : ""); },
         names: "שמות המראיינים (לא חובה, מופרדים בפסיק)", namesPh: "למשל ג'יין סמית', מנהלת משאבי אנוש",
+        deep: { business: "איך הם מרוויחים", market: "השוק", competitors: "מתחרים", finance: "בעלות ונתונים כספיים", news: "12 החודשים האחרונים", opps: "הזדמנויות", risks: "אתגרים", problems: "מה התפקיד יידרש לפתור", angles: "הזוויות שלך" },
         resH: "מחקר על החברה", stage: "איפה אתה עומד", roleH: "התפקיד", ivH: "המראיינים", srcH: "מקורות",
         qH: "שאלות צפויות", showA: "הצג תשובה", hideA: "הסתר תשובה", tip: "טיפ: ",
         practice: "מצב תרגול", stopPractice: "הצג את כל השאלות", next: "השאלה הבאה", prev: "הקודמת",
@@ -760,14 +811,52 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
         voiceReady: "תיבת התשובה מוכנה. עכשיו לחץ ביחד על מקש חלונות ועל H ודבר (לחיצה נוספת עוצרת). בטלפון, לחץ על המיקרופון במקלדת.",
         rateErr: "לא הצלחתי לדרג כרגע. נסה שוב בעוד דקה.", rateOff: "הדירוג לא זמין כאן (הוא עובד כשהדף פתוח בתוך קלוד ואישרת אותו).", needAns: "קודם כתוב או הכתב את התשובה."
       },
-      nav: { board: "לוח המשרות", iv: "הכנה לראיון", log: "יומן פעולות", ct: "אנשי קשר", co: "חברות", menu: "תפריט" },
+      nav: { board: "לוח המשרות", iv: "הכנה לראיון", log: "יומן פעולות", ct: "נטוורקינג", ag: "חברות השמה", co: "חברות", menu: "תפריט" },
       ct: {
-        title: "אנשי קשר", intro: "האנשים בחיפוש העבודה שלך: מי הם, איפה הם עובדים או לאיזו חברה הם מחברים אותך, ואיך יוצרים איתם קשר. אפשר להוסיף הערות לאורך הזמן, וכל מה שרשמת ביומן עם האדם מופיע כאן.",
+        title: "נטוורקינג", intro: "כל הרשת שלך בחיפוש העבודה במקום אחד: האנשים שאתה מוסיף, עם כל מייל, וואטסאפ, שיחה ופגישה שתרשום. למעלה: הודעות שמחכות לך, המספרים של השבוע ואירועי נטוורקינג באזור.",
         addH: "הוספת איש קשר", editH: "עריכת איש קשר", name: "שם", company: "חברה (עובד בה או מקושר אליה)", role: "תפקיד או קשר", email: "מייל", phone: "טלפון", linkedin: "קישור לפרופיל בלינקדאין", note: "הערה",
         save: "שמור", cancel: "ביטול", needName: "צריך למלא שם.", saved: "נשמר.", sug: "אנשים מיומן הפעולות שעוד לא באנשי הקשר:", sugH: "הצעות מיומן הפעולות", sugAdd: function (n) { return "+ " + n; },
         search: "חיפוש שם, חברה או הערה", none: "עוד אין אנשי קשר.", noMatch: "אין אנשי קשר שמתאימים.", count: function (n) { return n + " אנשי קשר"; },
         edit: "ערוך", remove: "הסר", removeQ: "להסיר את איש הקשר?", yes: "כן, להסיר", addNote: "הוסף הערה", notePh: "ההערה שלך", noteSave: "שמור הערה",
         acts: function (n) { return n + " פעולות ביומן"; }, nNotes: function (n) { return n === 1 ? "הערה אחת" : n + " הערות"; }, at: "ב־", err: function (c) { return "לא הצלחתי לשמור (קוד: " + c + ")."; }
+      },
+      ag: {
+        title: "חברות השמה", intro: "חברות ההשמה שאתה עובד מולן: למי לפנות, המשרות שהן פרסמו בחיפוש שלך, הודעות מוכנות לשליחה ואיפה כל אחת עומדת. שום דבר לא נשלח בשמך; מעתיקים את ההודעה, שולחים בעצמך ומסמנים כאן.",
+        w: { agencies: "חברות", contacted: "פנית אליהן", registered: "נרשמת", people: "מגייסים שנמצאו", sent: "הודעות שנשלחו", replied: "תגובות" },
+        st: { to_contact: "עוד לא פנית", contacted: "פנית", registered: "נרשמת", active: "עובדים איתך", paused: "בהמתנה" },
+        cst: { to_contact: "עוד לא פנית", sent: "נשלחה הודעה", replied: "ענה", call: "התקיימה שיחה", active: "עובד איתך", no_answer: "אין תשובה" },
+        kinds: { connect: "הודעה להזמנה בלינקדאין", message: "הודעה בלינקדאין", email: "מייל", followup: "תזכורת המשך" },
+        btn: { sent: "שלחתי", replied: "קיבלתי תשובה", call: "התקיימה שיחה", no_answer: "אין תשובה" },
+        ev: { sent: "נשלחה הודעה", replied: "התקבלה תשובה", call: "התקיימה שיחה", no_answer: "אין תשובה" },
+        counts: function (n, s, r) { return (n === 1 ? "איש קשר אחד" : n + " אנשים") + " · " + s + " פנית · " + r + " ענו"; },
+        registered: "נרשמת", regL: "נרשמתי באתר שלהם או שלחתי קורות חיים", statusL: "סטטוס", site: "אתר", next: "המשך: ",
+        jobsH: function (n) { return "המשרות שלהם בחיפוש שלך (" + n + ")"; }, teamH: "הודעה לתיבה הכללית", peopleH: function (n) { return "מגייסים (" + n + ")"; },
+        find: "מצא מגייסים", findQueued: "נשמר. ריצת הבוקר תחפש מגייסים ותוסיף אותם כאן.", findWait: "ממתין לריצת הבוקר שתחפש מגייסים (לינקדאין ומיילים שפורסמו בלבד).", findDone: function (d) { return "החיפוש הסתיים " + d + "."; },
+        addAg: "+ הוסף חברת השמה", f: { name: "שם החברה", url: "אתר", city: "עיר", focus: "תחום (למשל גיוס בכירים)", domain: "דומיין המייל (למשל randstad.ca)" },
+        exists: "החברה הזו כבר ברשימה.", addedByYou: "הוספת בעצמך", indep: "מגייס עצמאי (מהסוכן של לינקדאין)", fromAgent: "הסוכן שלך בלינקדאין", inbox: "תיבה כללית",
+        showing: function (x) { return "מוצג: " + x; }, showAll: "הצג הכול",
+        fv: { _contacted: "חברות שפנית אליהן", _registered: "חברות שנרשמת אליהן" }, pv: { all: "כל המגייסים", sent: "מגייסים ששלחת להם הודעה", replied: "מגייסים שענו" },
+        addC: "הוסף מגייס", editC: "עריכת מגייס", dueH: "תזכורות המשך", dueWhy: "אין תשובה, כדאי להזכיר מאז ", open: "פתח", search: "חיפוש חברה, תחום או מגייס"
+      },
+      net: {
+        weekH: function (d) { return "השבוע (מ-" + d + ")"; },
+        w: { reached: "פניות", accepted: "אישרו חיבור", replies: "תשובות", meetings: "פגישות", referrals: "הפניות" },
+        dueH: "הודעות שמחכות לך", noneDue: "אין כרגע מה לשלוח.", eventsH: "אירועי נטוורקינג באזור", noEvents: "עדיין אין אירועים קרובים; הריצה של הבוקר מרעננת את הרשימה בכל יום שני.",
+        evUpdated: function (d) { return "הרשימה עודכנה " + d + "."; }, register: "פרטים והרשמה", fit: { high: "התאמה גבוהה", medium: "התאמה טובה", low: "נטוורקינג כללי" },
+        k: { agent: "טיוטה מסוכן הלינקדאין", thanks: "תודה אחרי הפגישה", touch: "זמן לשמור על קשר", bday: "יום הולדת", holiday: "חג: ", occasion: "אירוע: " },
+        draft: "כתוב את ההודעה", redo: "כתוב שוב", drafting: "כותב...", markSent: "שלחתי", email: "מייל", noAi: "כתיבת הודעות לא זמינה כרגע בדף הזה.",
+        draftErr: "לא הצלחתי לכתוב את ההודעה; נסה שוב.", marked: "סומן כנשלח.", sentNote: function (k) { return "נשלח: " + k; },
+        wkv: { wk_reached: "אנשים שפנית אליהם השבוע", wk_accepted: "אנשים שאישרו השבוע", wk_replies: "אנשים שענו השבוע", wk_meetings: "פגישות השבוע", wk_referrals: "המלצות השבוע" },
+        wkNote: "ברשימה מופיעים אנשים שהייתה איתם פעילות מאז יום שני. המספר בריבוע מגיע מהספירה השבועית של הסוכן בלינקדאין, ולכן הוא יכול להיות שונה מעט.",
+        all: "הכול", referShort: "יכול להפנות", from: "מקור: ", nextTouch: "הקשר הבא: ", meetingsH: "פגישות", update: "הוסף עדכון",
+        st: { reached: "פניתי", connected: "התחברנו", replied: "ענה", meeting_set: "נקבעה פגישה", met: "נפגשנו", followup: "לחזור אליו", longterm: "איש קשר לטווח ארוך", closed: "נסגר" },
+        str: { strong: "חזק", good: "טוב", weak: "חלש" },
+        hol: { none: "בלי הודעות חג", canadian: "חגים קנדיים", jewish: "חגים יהודיים", both: "שניהם" },
+        kinds: { sent: "שלחתי הודעה", reply: "קיבלתי תשובה", meeting_set: "נקבעה פגישה", meeting: "התקיימה פגישה", note: "הערה" },
+        ch: { linkedin: "לינקדאין", email: "מייל", whatsapp: "וואטסאפ", phone: "טלפון", inperson: "פנים אל פנים", other: "אחר" },
+        f: { stage: "סטטוס", strength: "חוזק הקשר", holidays: "הודעות חג", birthday: "יום הולדת (חודש-יום, MM-DD)", next: "הקשר הבא", persona: "איך לדבר איתו", personaPh: "למשל: רשמי, עבדנו יחד, אוהב נושאי בינה מלאכותית",
+             refer: "יכול להפנות אותי או לעזור", what: "מה קרה", channel: "ערוץ", days: "לחזור אליו בעוד (ימים)", textPh: "פרטים (לפגישה: סיכום קצר)" },
+        bdayFmt: "פורמט יום הולדת: חודש-יום, למשל 03-14."
       },
       cod: { details: "פרטים", hide: "הסתר פרטים", website: "אתר", industry: "תחום", contact: "איש קשר עיקרי", none: "-", note: "הערה", save: "שמור", saved: "נשמר.",
         people: "אנשי הקשר שלך כאן: ", addNote: "הוסף הערה", notePh: "ההערה שלך", noteSave: "שמור הערה", contactShort: "איש קשר: " },
@@ -846,7 +935,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     $("t-title").textContent = L.title; $("t-sub").textContent = L.sub;
     $("h-strip").textContent = L.hStrip; $("h-board").textContent = L.hBoard; $("h-ivb").textContent = L.rd.h;
     $("btn-refresh").textContent = L.refresh;
-    $("btn-co").textContent = L.nav.co; $("btn-board").textContent = L.nav.board; $("btn-ct").textContent = L.nav.ct;
+    $("btn-co").textContent = L.nav.co; $("btn-board").textContent = L.nav.board; $("btn-ct").textContent = L.nav.ct; $("btn-ag").textContent = L.nav.ag;
     $("chat-fab").textContent = "💬 " + L.iv.chatBtn; $("chat-fab").setAttribute("aria-label", L.iv.chatBtn);
     $("btn-ppl").textContent = L.nav.log; $("btn-iv").textContent = L.nav.iv; $("nav").setAttribute("aria-label", L.nav.menu);
     $("q").placeholder = L.s.ph; $("q").setAttribute("aria-label", L.s.ph);
@@ -855,7 +944,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
   function toggleLang() {
     lang = lang === "en" ? "he" : "en";
     try { localStorage.setItem("jsh-lang", lang); } catch (e) {}
-    localError = ""; coMsg = ""; applyLang(); render(); renderView();
+    localError = ""; coMsg = ""; agMsg = ""; applyLang(); render(); renderView();
   }
 
   function fmtTime(iso) {
@@ -1304,6 +1393,8 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     // everything else lives on the job page.
     var top = el("div", "card-top");
     top.appendChild(el("span", scoreClass(card.score), card.score == null ? L.noScore : String(card.score)));
+    if (card.title_only) { var to = el("span", "badge warn", L.titleOnly); to.title = L.titleOnlyTip; top.appendChild(to); }
+    if (card.applicants != null && card.applicants !== "" && Number(card.applicants) < 20) { var fa = el("span", "badge info", L.fewApps(card.applicants)); fa.title = L.fewAppsTip; top.appendChild(fa); }
     if (pend) top.appendChild(el("span", "badge info", L.pending(stLabel(pend.status))));
     top.appendChild(el("span", "grow"));
     if (card.follow_up_due || dueActs().some(function (a) { return a.job_id === card.id; })) {
@@ -1427,27 +1518,29 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     var t = document.querySelector('.card[data-id="' + id + '"] .t-btn'); if (t) t.focus();
   }
   function renderView() {
-    var inJob = !!openId, inCo = coOpen && !inJob, inPpl = pplOpen && !inJob && !inCo, inIv = ivOpen && !inJob && !inCo && !inPpl, inCt = ctOpen && !inJob && !inCo && !inPpl && !inIv;
+    var inJob = !!openId, inCo = coOpen && !inJob, inPpl = pplOpen && !inJob && !inCo, inIv = ivOpen && !inJob && !inCo && !inPpl, inCt = ctOpen && !inJob && !inCo && !inPpl && !inIv, inAg = agOpen && !inJob && !inCo && !inPpl && !inIv && !inCt;
     $("jobview").hidden = !inJob;
     $("coview").hidden = !inCo;
     $("pplview").hidden = !inPpl;
     $("ivview").hidden = !inIv;
     $("ctview").hidden = !inCt;
-    var cur = inCo ? "co" : inPpl ? "log" : inIv ? "iv" : inCt ? "ct" : "board";
+    $("agview").hidden = !inAg;
+    var cur = inCo ? "co" : inPpl ? "log" : inIv ? "iv" : inCt ? "ct" : inAg ? "ag" : "board";
     Array.prototype.forEach.call(document.querySelectorAll(".nav-i"), function (b) { if (b.dataset.v === cur) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
     $("nav-cur").textContent = L.nav[cur];
     $("t-sub").hidden = true;
-    ["sec-strip", "sec-fu", "sec-board", "sec-ivb", "alerts"].forEach(function (x) { $(x).hidden = inJob || inCo || inPpl || inIv || inCt; });
+    ["sec-strip", "sec-fu", "sec-board", "sec-ivb", "alerts"].forEach(function (x) { $(x).hidden = inJob || inCo || inPpl || inIv || inCt || inAg; });
     renderMorning();
     if (inJob) renderJob();
     if (inCo) renderCo();
     if (inPpl) renderPpl();
     if (inIv) renderIv();
     if (inCt) renderCt();
+    if (inAg) renderAg();
     renderChat();
   }
   function go(v) {
-    openId = null; coOpen = v === "co"; pplOpen = v === "log"; ivOpen = v === "iv"; ctOpen = v === "ct";
+    openId = null; coOpen = v === "co"; pplOpen = v === "log"; ivOpen = v === "iv"; ctOpen = v === "ct"; agOpen = v === "ag"; agForm = null; agNoteBox = null; agMsg = "";
     actForm = null; actMsg = ""; actBox = null; coMsg = ""; coConfirm = null; ivJob = null; ivPractice = null; ivReveal = {}; ivAnsOpen = {}; ivMsg = ""; coAddOpen = false; ctForm = null; ctMsg2 = ""; ctConfirm = null; ctNote = null;
     $("nav").classList.remove("open"); $("nav-tg").setAttribute("aria-expanded", "false");
     renderView(); try { window.scrollTo(0, 0); } catch (e) {}
@@ -1517,6 +1610,8 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     var head = el("div", "job-head");
     var top = el("div", "card-top");
     top.appendChild(el("span", scoreClass(card.score), card.score == null ? L.noScore : String(card.score)));
+    if (card.title_only) { var to = el("span", "badge warn", L.titleOnly); to.title = L.titleOnlyTip; top.appendChild(to); }
+    if (card.applicants != null && card.applicants !== "" && Number(card.applicants) < 20) { var fa = el("span", "badge info", L.fewApps(card.applicants)); fa.title = L.fewAppsTip; top.appendChild(fa); }
     top.appendChild(el("span", "badge info", L.col[card.col] || card.status));
     if (card.track) top.appendChild(el("span", "badge info", L.jp.track + card.track));
     head.appendChild(top);
@@ -1695,9 +1790,34 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
   function todayIso() { var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function addDays(iso, n) { var d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function actType(t) { return L.act.types.filter(function (x) { return x[0] === t; })[0] || L.act.types[L.act.types.length - 1]; }
+  // 2026-11-03: where the job of an action stands now - a pending move first, then the board, then the
+  // search index (it also holds rejected and archived jobs).
+  var CLOSED_ST = { Rejected: 1, Archived: 1 };
+  function jobStatusOf(a) {
+    if (!a) return "";
+    if (a.job_id) { var p = pendingFor(a.job_id); if (p) return p.status; var c = cardById(a.job_id); if (c) return c.status || ""; }
+    if (a.job_url) { var rows = searchRows(); for (var i = 0; i < rows.length; i++) if (rows[i].url === a.job_url) return rows[i].st; }
+    return "";
+  }
+  var autoClosing = {}, autoTimer = null;
+  function scheduleAutoClose() { if (autoTimer) clearTimeout(autoTimer); autoTimer = setTimeout(autoCloseActs, 1500); }
+  // An open action (and its follow-up) closes by itself when its job is rejected or archived (not relevant).
+  async function autoCloseActs() {
+    autoTimer = null;
+    if (!db || !board) return;
+    var todo = activity.filter(function (a) { return (a.status || "open") === "open" && (a.job_id || a.job_url) && !autoClosing[a.id] && CLOSED_ST[jobStatusOf(a)]; });
+    if (!todo.length) return;
+    for (var i = 0; i < todo.length; i++) {
+      var a = todo[i]; autoClosing[a.id] = 1;
+      var st = jobStatusOf(a);
+      var notes = (Array.isArray(a.notes) ? a.notes.slice() : []).concat([{ at: new Date().toISOString(), kind: "closed", text: "Closed automatically: the job moved to " + st + "." }]);
+      await patchAct(a, { status: "closed", outcome: "not_relevant", closed_at: new Date().toISOString(), notes: notes });
+    }
+    renderFups(); if (openId) renderJob(); else if (pplOpen) renderPpl();
+  }
   function dueActs() {
     var t = todayIso();
-    return activity.filter(function (a) { return (a.status || "open") === "open" && a.follow_up_on && a.follow_up_on <= t; })
+    return activity.filter(function (a) { return (a.status || "open") === "open" && a.follow_up_on && a.follow_up_on <= t && !CLOSED_ST[jobStatusOf(a)]; })
       .sort(function (a, b) { return String(a.follow_up_on).localeCompare(String(b.follow_up_on)); });
   }
   async function addActivity(o, rerender) {
@@ -1950,11 +2070,11 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
       var mt = metaOf(c), d = String(mt.iv || "").slice(0, 10);
       if (d && d >= t && d <= in14 && ["applied", "interviewing", "offer"].indexOf(c.col) >= 0) items.push({ cat: "iv", pr: 0, when: d, kind: L.fu.iv, text: L.fu.ivText(c.title, c.company, fmtDT(mt.iv)), go: function () { openJob(c.id); } });
     });
-    dueActs().forEach(function (a) { items.push({ cat: "follow", pr: 1, when: a.follow_up_on, kind: L.fu.follow, text: L.act.dueItem(a.person, a.company) + (a.note ? " - " + a.note : ""), go: function () { if (a.job_id && cardById(a.job_id)) openJob(a.job_id); else go("log"); } }); });
+    dueActs().forEach(function (a) { items.push({ cat: "follow", pr: 1, when: a.follow_up_on, kind: L.fu.follow, text: L.act.dueItem(a.person, a.company) + (a.note ? " - " + a.note : "") + (jobStatusOf(a) ? " · " + L.fu.jobSt(stLabel(jobStatusOf(a))) : ""), go: function () { if (a.job_id && cardById(a.job_id)) openJob(a.job_id); else go("log"); } }); });
     activity.forEach(function (a) {
       if ((a.status || "open") !== "open") return;
       var ns = a.notes || [], last = ns[ns.length - 1];
-      if (last && last.kind === "reply") items.push({ cat: "decide", pr: 1, when: String(last.at).slice(0, 10), kind: L.fu.decide, text: a.person + (a.company ? " (" + a.company + ")" : "") + ": " + last.text, go: function () { if (a.job_id && cardById(a.job_id)) openJob(a.job_id); else go("log"); } });
+      if (last && last.kind === "reply") items.push({ cat: "decide", pr: 1, when: String(last.at).slice(0, 10), kind: L.fu.decide, text: a.person + (a.company ? " (" + a.company + ")" : "") + ": " + last.text + (jobStatusOf(a) ? " · " + L.fu.jobSt(stLabel(jobStatusOf(a))) : ""), go: function () { if (a.job_id && cardById(a.job_id)) openJob(a.job_id); else go("log"); } });
     });
     cards.forEach(function (c) { if (c.follow_up_due && c.col === "applied") items.push({ cat: "app", pr: 2, when: c.applied_date || "", kind: L.fu.app, text: L.fu.appText(c.title, c.company, fmtDay(c.applied_date)), go: function () { openJob(c.id); } }); });
     cards.forEach(function (c) { var pp = pendingFor(c.id); var col = pp ? COL_OF_STATUS[pp.status] : c.col; if (col === "shortlisted" && prepState(preps[c.id]) === "ready") items.push({ cat: "send", pr: 3, when: (preps[c.id] || {}).ready_at || "", kind: L.fu.send, text: L.fu.sendText(c.title, c.company), go: function () { openJob(c.id); } }); });
@@ -2056,7 +2176,14 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
   }
   /* ---------- morning summary (written by the 06:30 agent into summary/today) ---------- */
   var summary = null;
+  function renderScanWarn() {
+    var w = $("scanwarn"), h = board && board.scan_health && board.scan_health.linkedin;
+    var other = !!openId || coOpen || pplOpen || ivOpen || ctOpen || agOpen;
+    if (!h || !h.broken || other) { w.hidden = true; return; }
+    w.hidden = false; w.textContent = L.scanWarn(h.no_cards, h.searches);
+  }
   function renderMorning() {
+    renderScanWarn();
     var box = $("morning"); box.textContent = "";
     var sm = summary;
     var fresh = sm && sm.generated_at && (Date.now() - Date.parse(sm.generated_at) < 20 * 3600 * 1000);
@@ -2335,7 +2462,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     var old = people.filter(function (x) { return x.id === id; })[0] || {};
     var doc = Object.assign({}, old, { id: id, name: String(f.name).trim(), company: String(f.company || "").trim(), role: String(f.role || "").trim(),
       email: String(f.email || "").trim(), phone: String(f.phone || "").trim(), linkedin: String(f.linkedin || "").trim(), note: String(f.note || "").trim(),
-      notes: old.notes || [], created_at: old.created_at || now, updated_at: now });
+      notes: old.notes || [], created_at: old.created_at || now, updated_at: now, net_key: f.net_key || old.net_key || (urlOk(f.linkedin) ? netKeyOf(f.linkedin) : "") });
     try { await db.doc("people/" + id).set(doc); }
     catch (e) { ctMsg2 = L.ct.err((e && e.code) || L.err.unknown); renderCt(); return false; }
     people = people.filter(function (x) { return x.id !== id; }).concat([doc]);
@@ -2386,95 +2513,703 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     setTimeout(function () { try { $("ct-name").focus(); } catch (e) {} }, 0);
     return box;
   }
+  /* ---------- networking hub (2026-11-04): the Contacts page grows into one place for networking ---------- */
+  var netDoc = null, netEvents = null, netFilter = "all", netOpen = {}, netUpd = null, netMsg = "", netBusy = {}, netSecOpen = { due: true };
+  var NET_STAGES = ["reached", "connected", "replied", "meeting_set", "met", "followup", "longterm", "closed"];
+  var NET_RANK = { closed: 0, reached: 1, connected: 2, replied: 3, meeting_set: 4, met: 5, followup: 5, longterm: 6 };
+  var TOUCH_DAYS = 35; // a long-term contact gets a new touch every 4-6 weeks
+  // Verified on hebcal.com and official calendars, 2026-11-04. Jewish holidays start at sundown of the date given.
+  var NET_HOLIDAYS = [
+    { date: "2026-12-04", key: "hanukkah-2026", set: "jewish", en: "Hanukkah", he: "חנוכה" },
+    { date: "2026-12-23", key: "season-2026", set: "canadian", en: "Holiday season", he: "עונת החגים" },
+    { date: "2027-01-01", key: "newyear-2027", set: "canadian", en: "New Year", he: "השנה החדשה" },
+    { date: "2027-04-21", key: "passover-2027", set: "jewish", en: "Passover", he: "פסח" },
+    { date: "2027-10-01", key: "roshhashana-2027", set: "jewish", en: "Rosh Hashanah", he: "ראש השנה" },
+    { date: "2027-10-11", key: "thanksgiving-2027", set: "canadian", en: "Thanksgiving", he: "חג ההודיה" },
+    { date: "2027-12-23", key: "season-2027", set: "canadian", en: "Holiday season", he: "עונת החגים" },
+    { date: "2027-12-24", key: "hanukkah-2027", set: "jewish", en: "Hanukkah", he: "חנוכה" }
+  ];
+  function netKeyOf(url, name) {
+    var m = /linkedin\.com\/in\/([^\/?#]+)/i.exec(String(url || ""));
+    if (m) return "li-" + m[1].toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
+    return "n-" + String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+  }
+  function netList() {
+    var agent = (netDoc && Array.isArray(netDoc.people)) ? netDoc.people : [];
+    var byKey = {}; agent.forEach(function (a) { byKey[a.key] = a; });
+    var used = {}, out = [];
+    people.forEach(function (p) {
+      var k = p.net_key || (urlOk(p.linkedin) ? netKeyOf(p.linkedin) : "");
+      var a = (k && byKey[k]) || (byKey[p.id]) || null;
+      if (a) used[a.key] = 1;
+      out.push(netEntry(p, a));
+    });
+    agent.forEach(function (a) { if (!used[a.key]) out.push(netEntry(null, a)); });
+    return out;
+  }
+  function netEntry(p, a) {
+    p = p || null; a = a || null;
+    var stage = (p && p.net_stage) || (a && a.stage) || "reached";
+    var last = [p && p.last_contact, a && a.last_date].filter(Boolean).sort().pop() || "";
+    var e = {
+      doc: p, agent: a, id: p ? p.id : (a ? a.key : ""), key: (a && a.key) || (p && p.net_key) || "",
+      name: (p && p.name) || (a && a.name) || "", company: (p && p.company) || "", role: (p && p.role) || "",
+      url: (p && p.linkedin) || (a && a.url) || "", email: (p && p.email) || "", phone: (p && p.phone) || "",
+      location: (a && a.location) || "", stage: stage, strength: (p && p.strength) || "", can_refer: !!((p && p.can_refer) || (a && a.can_refer)),
+      last: last, summary: (a && a.summary) || "", stage_note: (a && a.stage_note) || "", pending: (a && a.pending_message) || "",
+      sources: (a && a.sources) || [], manual: !!p, persona: (p && p.persona) || "", birthday: (p && p.birthday) || "",
+      holidays: (p && p.holidays) || (NET_RANK[stage] >= 3 ? "canadian" : "none"), notes: (p && p.notes) || [], meetings: (p && p.meetings) || [],
+      sent: (p && p.sent_flags) || {}, drafts: (p && p.drafts) || {}, occasions: (p && p.occasions) || []
+    };
+    var keep = ["met", "followup", "longterm"].indexOf(stage) >= 0 || ((e.strength === "strong" || e.strength === "good") && NET_RANK[stage] >= 3);
+    e.next_touch = (p && p.next_touch) || (keep && last ? addDays(String(last).slice(0, 10), TOUCH_DAYS) : "");
+    return e;
+  }
+  async function netSave(e, fields) {
+    if (!db) return false;
+    var now = new Date().toISOString();
+    var id = e.doc ? e.doc.id : (e.key || ("p" + Date.now()));
+    var base = e.doc ? {} : { id: id, name: e.name, company: e.company, role: e.role, email: "", phone: "", linkedin: e.url, note: "", notes: [], created_at: now, net_key: e.key };
+    var doc = Object.assign({}, e.doc || {}, base, fields, { updated_at: now });
+    try { await db.doc("people/" + id).set(doc); }
+    catch (err) { netMsg = L.ct.err((err && err.code) || L.err.unknown); renderCt(); return false; }
+    people = people.filter(function (x) { return x.id !== id; }).concat([doc]);
+    return true;
+  }
+  function netDue() {
+    var t = todayIso(), items = [];
+    var lng = lang === "he" ? "he" : "en";
+    netList().forEach(function (e) {
+      if (e.stage === "closed") return;
+      if (e.pending && !e.sent["agent"] && String(e.last || "") >= addDays(t, -21)) items.push({ e: e, key: "agent", kind: L.net.k.agent, when: e.last || t, draft: e.pending });
+      e.meetings.forEach(function (m, i) { if (!m.thanked) items.push({ e: e, key: "thanks-" + i, kind: L.net.k.thanks, when: String(m.at || t).slice(0, 10), meeting: m }); });
+      if (e.next_touch && e.next_touch <= t && !(e.sent["touch-" + e.next_touch])) items.push({ e: e, key: "touch-" + e.next_touch, kind: L.net.k.touch, when: e.next_touch });
+      if (/^\d\d-\d\d$/.test(e.birthday)) {
+        var y = t.slice(0, 4), bd = y + "-" + e.birthday; if (bd < addDays(t, -1)) bd = (Number(y) + 1) + "-" + e.birthday;
+        if (bd <= addDays(t, 3) && !e.sent["bday-" + bd]) items.push({ e: e, key: "bday-" + bd, kind: L.net.k.bday, when: bd });
+      }
+      if (e.holidays && e.holidays !== "none") NET_HOLIDAYS.forEach(function (h) {
+        if ((e.holidays === "both" || e.holidays === h.set) && h.date >= addDays(t, -1) && h.date <= addDays(t, 5) && !e.sent["hol-" + h.key])
+          items.push({ e: e, key: "hol-" + h.key, kind: L.net.k.holiday + (lng === "he" ? h.he : h.en), when: h.date, holiday: h });
+      });
+      e.occasions.forEach(function (o, i) { if (o.date && o.date >= addDays(t, -2) && o.date <= addDays(t, 3) && !e.sent["occ-" + i + "-" + o.date]) items.push({ e: e, key: "occ-" + i + "-" + o.date, kind: L.net.k.occasion + (o.note || ""), when: o.date }); });
+    });
+    return items.sort(function (a, b) { return String(a.when).localeCompare(String(b.when)); });
+  }
+  async function netDraft(it, again) {
+    var e = it.e;
+    if (!again && (it.draft || e.drafts[it.key])) return;
+    if (!sample) { netMsg = L.net.noAi; renderCt(); return; }
+    netBusy[e.id + it.key] = true; renderCt();
+    var notes = (e.notes || []).slice(-4).map(function (n) { return "- " + String(n.at || "").slice(0, 10) + ": " + (n.text || ""); }).join("\n");
+    var occ = it.holiday ? ("a " + it.holiday.en + " greeting (send on " + it.holiday.date + ")") : it.key.indexOf("bday") === 0 ? "a birthday greeting" : it.key.indexOf("thanks") === 0 ? ("a thank-you after our meeting on " + String(it.meeting.at || "").slice(0, 10) + ". Meeting summary: " + (it.meeting.summary || "")) : it.key.indexOf("touch") === 0 ? "a light check-in to keep the relationship warm (it has been about 5 weeks); share one short genuine update or ask about them, no hard ask" : ("this occasion: " + it.kind);
+    var prompt = "Write one short, natural message from " + USER_NAME + " to " + e.name + ".\nAbout " + USER_NAME + " (currently looking for a new role): " + USER_FACTS + "\n" +
+      "About " + e.name + ": " + [e.role, e.company ? "at " + e.company : "", e.location].filter(Boolean).join(", ") + ".\n" +
+      "Relationship: stage " + e.stage + (e.strength ? ", strength " + e.strength : "") + (e.can_refer ? ", has offered to help or refer" : "") + ".\n" +
+      (e.persona ? "How to talk to them (the user's note): " + e.persona + "\n" : "") + (e.summary ? "History: " + e.summary + "\n" : "") + (notes ? "Recent notes:\n" + notes + "\n" : "") +
+      "Purpose: " + occ + ".\nRules: English; warm and specific to this person, never generic; at most 70 words; no hashtags; at most one emoji and only for a holiday or birthday; do not invent facts about either person; no job request unless the purpose says so. Return only the message text.";
+    try {
+      var r = await sample(prompt, { cache: false });
+      var txt = String((r && r.text) || "").trim();
+      if (!txt) throw { code: "empty" };
+      var drafts = Object.assign({}, e.drafts); drafts[it.key] = txt;
+      await netSave(e, { drafts: drafts });
+      netMsg = "";
+    } catch (err) { netMsg = L.net.draftErr; }
+    netBusy[e.id + it.key] = false; renderCt();
+  }
+  async function netMarkSent(it) {
+    var e = it.e, t = todayIso();
+    var sent = Object.assign({}, e.sent); sent[it.key] = t;
+    var f = { sent_flags: sent, last_contact: t };
+    if (it.key.indexOf("thanks-") === 0) { var ms = e.meetings.map(function (m) { return Object.assign({}, m); }); var i = Number(it.key.split("-")[1]); if (ms[i]) ms[i].thanked = t; f.meetings = ms; }
+    if (["met", "followup", "longterm"].indexOf(e.stage) >= 0 || it.key.indexOf("touch") === 0 || it.key.indexOf("thanks") === 0) f.next_touch = addDays(t, TOUCH_DAYS);
+    f.notes = (e.notes || []).concat([{ at: new Date().toISOString(), kind: "sent", text: L.net.sentNote(it.kind) }]);
+    if (NET_RANK[e.stage] < 1) f.net_stage = "reached";
+    if (await netSave(e, f)) { netMsg = L.net.marked; renderCt(); }
+  }
+  async function netLogUpdate(e, u) {
+    var t = todayIso(), now = new Date().toISOString();
+    var txt = String(u.text || "").trim();
+    var f = { last_contact: u.kind === "note" ? (e.doc && e.doc.last_contact) || "" : t };
+    f.notes = (e.notes || []).concat([{ at: now, kind: u.kind, channel: u.channel || "", text: (u.channel ? "[" + L.net.ch[u.channel] + "] " : "") + (L.net.kinds[u.kind] || "") + (txt ? ": " + txt : "") }]);
+    var rank = NET_RANK[e.stage] || 0;
+    if (u.kind === "sent" && rank < 1) f.net_stage = "reached";
+    if (u.kind === "reply" && rank < 3) f.net_stage = "replied";
+    if (u.kind === "meeting_set" && rank < 4) f.net_stage = "meeting_set";
+    if (u.kind === "meeting") { if (rank < 5 || e.stage === "meeting_set") f.net_stage = "met"; f.meetings = (e.meetings || []).concat([{ at: t, summary: txt, thanked: "" }]); f.next_touch = addDays(t, TOUCH_DAYS); }
+    if (Number(u.days) > 0) f.next_touch = addDays(t, Number(u.days));
+    if (await netSave(e, f)) { netUpd = null; netMsg = L.ct.saved; renderCt(); }
+  }
+  function netWeek() {
+    var w = (netDoc && Array.isArray(netDoc.weekly) && netDoc.weekly.length) ? netDoc.weekly[netDoc.weekly.length - 1] : null;
+    var d = new Date(); var dow = (d.getDay() + 6) % 7; var mon = addDays(todayIso(), -dow);
+    var m = { sent: 0, reply: 0, meeting: 0 };
+    people.forEach(function (p) { (p.notes || []).forEach(function (n) { if (String(n.at || "").slice(0, 10) >= mon && m[n.kind] !== undefined) m[n.kind]++; }); });
+    var li = (w && w.weekStart && w.weekStart >= addDays(mon, -1)) ? w : null;
+    return { mon: mon, reached: m.sent + (li ? Number(li.outreachSent) || 0 : 0), replies: m.reply + (li ? Number(li.replies) || 0 : 0),
+      meetings: m.meeting + (li ? Number(li.callsHeld) || 0 : 0), referrals: li ? Number(li.referrals) || 0 : 0, accepted: li ? Number(li.accepted) || 0 : 0 };
+  }
+  function netWkMatch(e, f, mon) {
+    var notes = (e.notes || []).filter(function (n) { return String(n.at || "").slice(0, 10) >= mon; });
+    var has = function (k) { return notes.some(function (n) { return n.kind === k; }); };
+    var touched = String(e.last || "") >= mon, r = NET_RANK[e.stage] || 0;
+    if (f === "wk_reached") return touched || has("sent");
+    if (f === "wk_accepted") return touched && r >= 2;
+    if (f === "wk_replies") return has("reply") || (touched && r >= 3);
+    if (f === "wk_meetings") return has("meeting") || has("meeting_set") || (touched && (e.stage === "met" || e.stage === "meeting_set"));
+    if (f === "wk_referrals") return touched && !!e.can_refer;
+    return true;
+  }
+  function netStrip() {
+    var w = netWeek(), strip = el("div", "strip fu-strip2");
+    [[w.reached, L.net.w.reached, "wk_reached"], [w.accepted, L.net.w.accepted, "wk_accepted"], [w.replies, L.net.w.replies, "wk_replies"], [w.meetings, L.net.w.meetings, "wk_meetings"], [w.referrals, L.net.w.referrals, "wk_referrals"]].forEach(function (x) {
+      strip.appendChild(clickTile(x[0], x[1], netFilter === x[2], function () { netFilter = netFilter === x[2] ? "all" : x[2]; ctQ = ""; renderCt(); if (netFilter !== "all") scrollToList("ct-list"); }));
+    });
+    var box = el("div", "co-box"); box.appendChild(el("strong", null, L.net.weekH(fmtDay(w.mon)))); box.appendChild(strip);
+    return box;
+  }
+  function netSection(root, key, title, meta, build) {
+    var p = el("div", "co-box"); var hb = el("button", "acc-h"); hb.type = "button";
+    var open = !!netSecOpen[key]; hb.setAttribute("aria-expanded", open ? "true" : "false");
+    hb.appendChild(auto2(el("span", "acc-t", title))); if (meta) hb.appendChild(el("span", "acc-m" + (key === "due" && meta !== "0" ? " hot" : ""), meta)); hb.appendChild(el("span", "acc-c", open ? "▾" : "▸"));
+    hb.addEventListener("click", function () { netSecOpen[key] = !open; renderCt(); });
+    p.appendChild(hb);
+    if (open) { var b = el("div", "acc-b"); build(b); p.appendChild(b); }
+    root.appendChild(p);
+  }
+  function netDueEl(b, items) {
+    if (!items.length) { b.appendChild(el("p", "note", L.net.noneDue)); return; }
+    items.forEach(function (it) {
+      var e = it.e, row = el("div", "ct-row");
+      var head = el("div", "panel-head"); var mn = el("div", "co-main");
+      mn.appendChild(auto2(el("span", "co-name", e.name))); mn.appendChild(auto2(el("span", "co-meta", it.kind + " · " + fmtDay(it.when))));
+      head.appendChild(mn); row.appendChild(head);
+      var txt = it.draft || e.drafts[it.key] || "";
+      var busy = !!netBusy[e.id + it.key];
+      if (txt) { var pre = el("pre", "doc", txt); pre.setAttribute("dir", "auto"); row.appendChild(pre); }
+      else if (busy) row.appendChild(el("p", "note", L.net.drafting));
+      var acts = el("div", "acts");
+      if (txt) acts.appendChild(copyBtn(txt));
+      var g = el("button", "btn-s" + (txt ? "" : " primary"), txt ? L.net.redo : L.net.draft); g.type = "button"; g.disabled = busy || !sample || !!it.draft;
+      if (it.draft) g.hidden = true;
+      g.addEventListener("click", function () { netDraft(it, !!txt); }); acts.appendChild(g);
+      var s = el("button", "btn-s", L.net.markSent); s.type = "button"; s.disabled = !db; s.addEventListener("click", function () { netMarkSent(it); }); acts.appendChild(s);
+      if (urlOk(e.url)) { var a = el("a", "btn-s", "LinkedIn"); a.href = e.url; a.target = "_blank"; a.rel = "noopener noreferrer"; acts.appendChild(a); }
+      if (e.email) { var m = el("a", "btn-s", L.net.email); m.href = "mailto:" + e.email; acts.appendChild(m); }
+      row.appendChild(acts);
+      b.appendChild(row);
+    });
+  }
+  function netEventsEl(b) {
+    var ev = (netEvents && Array.isArray(netEvents.items)) ? netEvents.items.filter(function (x) { return String(x.end || x.date || "") >= todayIso(); }) : [];
+    if (!ev.length) { b.appendChild(el("p", "note", L.net.noEvents)); return; }
+    ev.sort(function (a, c) { return String(a.date).localeCompare(String(c.date)); }).forEach(function (x) {
+      var row = el("div", "ct-row"); var mn = el("div", "co-main");
+      mn.appendChild(auto2(el("span", "co-name", x.title))); mn.appendChild(auto2(el("span", "co-meta", fmtDay(x.date) + (x.end ? " - " + fmtDay(x.end) : "") + " · " + (x.place || ""))));
+      row.appendChild(mn);
+      if (x.why) row.appendChild(auto2(el("p", "iv-a", (x.fit ? L.net.fit[x.fit] + " · " : "") + x.why)));
+      if (urlOk(x.url)) { var a = el("a", "btn-s primary", L.net.register); a.href = x.url; a.target = "_blank"; a.rel = "noopener noreferrer"; var r = el("div", "acts"); r.appendChild(a); row.appendChild(r); }
+      b.appendChild(row);
+    });
+    if (netEvents && netEvents.updated_at) b.appendChild(el("p", "note", L.net.evUpdated(fmtDay(netEvents.updated_at))));
+  }
+  function netEditEl(e) {
+    var box = el("div", "co-det");
+    var g = el("div", "co-grid");
+    var f = { net_stage: e.stage, strength: e.strength, can_refer: e.can_refer, birthday: e.birthday, holidays: e.holidays, persona: e.persona, next_touch: e.next_touch };
+    var sel = function (label, key, opts) { var lab = el("label", null, label); var s = el("select", "co-in"); opts.forEach(function (o) { var op = el("option", null, o[1]); op.value = o[0]; if (o[0] === f[key]) op.selected = true; s.appendChild(op); }); s.addEventListener("change", function () { f[key] = s.value; }); lab.appendChild(s); g.appendChild(lab); };
+    sel(L.net.f.stage, "net_stage", NET_STAGES.map(function (s) { return [s, L.net.st[s]]; }));
+    sel(L.net.f.strength, "strength", [["", "-"], ["strong", L.net.str.strong], ["good", L.net.str.good], ["weak", L.net.str.weak]]);
+    sel(L.net.f.holidays, "holidays", [["none", L.net.hol.none], ["canadian", L.net.hol.canadian], ["jewish", L.net.hol.jewish], ["both", L.net.hol.both]]);
+    var inp = function (label, key, ph, dir) { var lab = el("label", null, label); var i = el("input", "co-in"); i.type = key === "next_touch" ? "date" : "text"; i.value = f[key] || ""; if (ph) i.placeholder = ph; i.setAttribute("dir", dir || "auto"); i.addEventListener("input", function () { f[key] = i.value; }); lab.appendChild(i); g.appendChild(lab); };
+    inp(L.net.f.birthday, "birthday", "MM-DD", "ltr");
+    inp(L.net.f.next, "next_touch", "", "ltr");
+    inp(L.net.f.persona, "persona", L.net.f.personaPh);
+    var cl = el("label", "ct-set"); var cb = el("input"); cb.type = "checkbox"; cb.checked = !!f.can_refer; cb.addEventListener("change", function () { f.can_refer = cb.checked; }); cl.appendChild(cb); cl.appendChild(el("span", null, L.net.f.refer)); g.appendChild(cl);
+    box.appendChild(g);
+    var r = el("div", "acts"); var sv = el("button", "btn-s primary", L.ct.save); sv.type = "button"; sv.disabled = !db;
+    sv.addEventListener("click", async function () {
+      if (f.birthday && !/^\d\d-\d\d$/.test(f.birthday)) { netMsg = L.net.bdayFmt; renderCt(); return; }
+      if (await netSave(e, { net_stage: f.net_stage, strength: f.strength, can_refer: !!f.can_refer, birthday: f.birthday || "", holidays: f.holidays, persona: String(f.persona || "").trim(), next_touch: f.next_touch || "" })) { netMsg = L.ct.saved; renderCt(); }
+    });
+    r.appendChild(sv); box.appendChild(r);
+    return box;
+  }
+  function netUpdEl(e) {
+    if (!netUpd || netUpd.id !== e.id) netUpd = { id: e.id, kind: "sent", channel: "linkedin", text: "", days: "" };
+    var u = netUpd, box = el("div", "act-box");
+    var g = el("div", "co-grid");
+    var s1 = el("select", "co-in"); Object.keys(L.net.kinds).forEach(function (k) { var o = el("option", null, L.net.kinds[k]); o.value = k; if (k === u.kind) o.selected = true; s1.appendChild(o); }); s1.addEventListener("change", function () { u.kind = s1.value; });
+    var l1 = el("label", null, L.net.f.what); l1.appendChild(s1); g.appendChild(l1);
+    var s2 = el("select", "co-in"); Object.keys(L.net.ch).forEach(function (k) { var o = el("option", null, L.net.ch[k]); o.value = k; if (k === u.channel) o.selected = true; s2.appendChild(o); }); s2.addEventListener("change", function () { u.channel = s2.value; });
+    var l2 = el("label", null, L.net.f.channel); l2.appendChild(s2); g.appendChild(l2);
+    var dd = el("input", "co-in"); dd.type = "number"; dd.min = "0"; dd.max = "365"; dd.value = u.days; dd.addEventListener("input", function () { u.days = dd.value; });
+    var l3 = el("label", null, L.net.f.days); l3.appendChild(dd); g.appendChild(l3);
+    box.appendChild(g);
+    var ta = el("textarea", "co-in"); ta.maxLength = 1500; ta.setAttribute("dir", "auto"); ta.placeholder = L.net.f.textPh; ta.value = u.text; ta.addEventListener("input", function () { u.text = ta.value; }); box.appendChild(ta);
+    var r = el("div", "acts");
+    var sv = el("button", "btn-s primary", L.ct.save); sv.type = "button"; sv.disabled = !db; sv.addEventListener("click", function () { netLogUpdate(e, u); });
+    var cn = el("button", "btn-s", L.ct.cancel); cn.type = "button"; cn.addEventListener("click", function () { netUpd = null; renderCt(); });
+    r.appendChild(sv); r.appendChild(cn); box.appendChild(r);
+    return box;
+  }
+  function netRow(e) {
+    var row = el("div", "ct-row");
+    var open = !!netOpen[e.id];
+    var tg = el("button", "acc-h ct-tg"); tg.type = "button"; tg.setAttribute("aria-expanded", open ? "true" : "false");
+    var mn = el("div", "co-main"); mn.appendChild(auto2(el("span", "co-name", e.name)));
+    var sub = [e.role, e.company ? L.ct.at + e.company : "", !e.role && !e.company ? e.location : ""].filter(Boolean).join(" ");
+    if (sub) mn.appendChild(auto2(el("span", "co-meta", sub)));
+    tg.appendChild(mn);
+    var meta = el("span", "acc-m", L.net.st[e.stage] + (e.strength ? " · " + L.net.str[e.strength] : "") + (e.can_refer ? " · " + L.net.referShort : "") + (e.last ? " · " + fmtDay(e.last) : ""));
+    tg.appendChild(meta); tg.appendChild(el("span", "acc-c", open ? "▾" : "▸"));
+    tg.addEventListener("click", function () { netOpen[e.id] = !open; renderCt(); });
+    row.appendChild(tg);
+    if (!open) return row;
+    var body = el("div", "acc-b");
+    var line = el("div", "ct-line");
+    if (urlOk(e.url)) { var li = el("a", null, "LinkedIn"); li.href = e.url; li.target = "_blank"; li.rel = "noopener noreferrer"; line.appendChild(li); }
+    if (e.email) { var em = el("a", null, e.email); em.href = "mailto:" + e.email; em.setAttribute("dir", "ltr"); line.appendChild(em); }
+    if (e.phone) { var ph = el("a", null, e.phone); ph.href = "tel:" + String(e.phone).replace(/[^\d+]/g, ""); ph.setAttribute("dir", "ltr"); line.appendChild(ph); }
+    if (e.sources.length) line.appendChild(el("span", "meta", L.net.from + e.sources.join(", ")));
+    if (e.next_touch) line.appendChild(el("span", "meta", L.net.nextTouch + fmtDay(e.next_touch)));
+    body.appendChild(line);
+    if (e.summary) body.appendChild(auto2(el("p", "iv-a", e.summary)));
+    if (e.stage_note && !e.doc) body.appendChild(auto2(el("p", "note", e.stage_note)));
+    if (e.meetings.length) { body.appendChild(el("strong", null, L.net.meetingsH)); e.meetings.forEach(function (m) { body.appendChild(auto2(el("p", "iv-a", fmtDay(m.at) + ": " + (m.summary || "")))); }); }
+    if (e.notes.length) body.appendChild(notesEl(e.notes));
+    var acts = el("div", "acts");
+    var up = el("button", "btn-s primary", L.net.update); up.type = "button"; up.disabled = !db; up.addEventListener("click", function () { netUpd = { id: e.id, kind: "sent", channel: "linkedin", text: "", days: "" }; renderCt(); });
+    var ed = el("button", "btn-s", L.ct.edit); ed.type = "button"; ed.disabled = !db;
+    ed.addEventListener("click", function () { ctForm = { id: e.doc ? e.doc.id : e.key, name: e.name, company: e.company, role: e.role, email: e.email, phone: e.phone, linkedin: e.url, note: (e.doc && e.doc.note) || "", net_key: e.key }; ctMsg2 = ""; renderCt(); try { window.scrollTo(0, 0); } catch (x) {} });
+    acts.appendChild(up); acts.appendChild(ed);
+    var nA = activity.filter(function (a) { return pKey(a.person) === pKey(e.name); }).length;
+    if (nA) { var lk = el("button", "btn-s", L.ct.acts(nA)); lk.type = "button"; lk.addEventListener("click", function () { pplQ = e.name; go("log"); }); acts.appendChild(lk); }
+    if (e.doc) { var rm = el("button", "btn-s", L.ct.remove); rm.type = "button"; rm.disabled = !db; rm.addEventListener("click", function () { ctConfirm = e.doc.id; renderCt(); }); acts.appendChild(rm); }
+    if (ctConfirm && e.doc && ctConfirm === e.doc.id) {
+      acts.textContent = ""; acts.appendChild(el("span", "meta", L.ct.removeQ));
+      var y = el("button", "btn-s confirm", L.ct.yes); y.type = "button"; y.addEventListener("click", function () { removePerson(e.doc); });
+      var n = el("button", "btn-s", L.ct.cancel); n.type = "button"; n.addEventListener("click", function () { ctConfirm = null; renderCt(); });
+      acts.appendChild(y); acts.appendChild(n);
+    }
+    body.appendChild(acts);
+    if (netUpd && netUpd.id === e.id) body.appendChild(netUpdEl(e));
+    body.appendChild(netEditEl(e));
+    row.appendChild(body);
+    return row;
+  }
+  /* ---------- recruiting agencies (2026-11-04) ---------- */
+  var agAdd = null, agPeople = null;
+  var agencies = {}, agReqs = {}, agOpen = false, agRow = {}, agFilter = "all", agQ = "", agMsg = "", agBusy = {}, agForm = null, agNoteBox = null, agKind = {};
+  var AG_ST = ["to_contact", "contacted", "registered", "active", "paused"];
+  var AGC_ST = ["to_contact", "sent", "replied", "call", "active", "no_answer"];
+  var AG_FOLLOW_DAYS = 7;
+  // Verified facts only (profile/FACTS.md, 2026-11-04). Numbers from older message templates that are not in FACTS.md are deliberately left out.
+  // Filled in during setup from profile/FACTS.md (verified facts only; the message writer may use nothing else).
+  var USER_NAME = {{USER_NAME_JS}};
+  var USER_FACTS = {{USER_FACTS_JS}};
+  function clickTile(num, label, on, fn) {
+    var t = el("div", "tile click" + (on ? " on" : "")); t.setAttribute("role", "button"); t.tabIndex = 0; t.setAttribute("aria-pressed", on ? "true" : "false");
+    t.appendChild(el("span", "num", String(num))); t.appendChild(el("span", "lbl", label));
+    t.addEventListener("click", fn); t.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(); } });
+    return t;
+  }
+  function scrollToList(id) { setTimeout(function () { var x = $(id); if (x && x.scrollIntoView) try { x.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} }, 30); }
+  var AGC_RANK = { to_contact: 0, sent: 1, no_answer: 1, replied: 2, call: 3, active: 4 };
+  function agNorm(n) { return String(n || "").toLowerCase().replace(/\(.*?\)/g, " ").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").replace(/\b(inc|ltd|limited|corp|corporation|canada|group|the|co)\b/g, " ").replace(/\s+/g, " ").trim(); }
+  // Independent / agency recruiters the daily LinkedIn agent reached out to (in-house recruiters are left out).
+  function agFromNet() {
+    var out = {};
+    if (!netDoc || !Array.isArray(netDoc.people)) return out;
+    netDoc.people.forEach(function (p) {
+      if (String(p.type || "") !== "recruiter") return;
+      var comp = String(p.company || ""); if (/in-house/i.test(comp)) return;
+      var name = comp.split(" (")[0].trim() || p.name; if (!name) return;
+      var mt = comp.match(/\((.*)$/); var title = mt ? mt[1].replace(/\)\s*$/, "") : "";
+      var st = { replied: "replied", meeting_set: "call", met: "call" }[p.stage] || "sent";
+      var c = { id: "li-" + p.key, name: p.name || name, title: title, url: p.url || "", email: "", phone: "", status: st, last: p.last_date || "", next: "", notes: [], source: L.ag.fromAgent, why: String(p.stage_note || "").slice(0, 240), li_key: p.key };
+      var k = agNorm(name); if (!k) return;
+      (out[k] = out[k] || { name: name, contacts: [] }).contacts.push(c);
+    });
+    return out;
+  }
+  function agList() {
+    var net = agFromNet(), used = {};
+    var list = Object.keys(agencies).map(function (k) { return agencies[k]; }).filter(function (a) { return a && a.key; }).map(function (a) {
+      var v = net[agNorm(a.name)]; if (!v) return a;
+      used[agNorm(a.name)] = 1;
+      var cs = (a.contacts || []).map(function (x) {
+        if (!x.li_key) return x;
+        var y = v.contacts.filter(function (c) { return c.li_key === x.li_key; })[0];
+        return y && (AGC_RANK[y.status] || 0) > (AGC_RANK[x.status] || 0) ? Object.assign({}, x, { status: y.status, last: y.last > (x.last || "") ? y.last : x.last }) : x;
+      });
+      var add = v.contacts.filter(function (c) { return !cs.some(function (x) { return x.id === c.id || x.li_key === c.li_key || (c.url && x.url === c.url) || pKey(x.name) === pKey(c.name); }); });
+      return Object.assign({}, a, { contacts: cs.concat(add) });
+    });
+    Object.keys(net).forEach(function (k) {
+      if (used[k]) return;
+      var v = net[k], key = "ag-li-" + k.replace(/ /g, "-").slice(0, 60);
+      list.push({ key: key, name: v.name, url: "", domain: "", city: "", focus: L.ag.indep, source: L.ag.fromAgent, status: "contacted", registered: false, jobs_url: "", notes: [], contacts: v.contacts, _virtual: true });
+    });
+    return list;
+  }
+  async function agSave(a, fields) {
+    if (!db) return false;
+    var doc = Object.assign({}, a, fields, { updated_at: new Date().toISOString() });
+    delete doc._virtual; if (!doc.created_at) doc.created_at = doc.updated_at;
+    try { await db.doc("agencies/" + a.key).set(doc); }
+    catch (e) { agMsg = L.ct.err((e && e.code) || "unknown"); renderAg(); return false; }
+    agencies[a.key] = doc; return true;
+  }
+  function agSetContact(a, cid, fields) { return (a.contacts || []).map(function (c) { return c.id === cid ? Object.assign({}, c, fields) : c; }); }
+  function agJobs(a) {
+    var n = String(a.name || "").toLowerCase().split(/[ (\/]/)[0];
+    if (!n || n.length < 4) return [];
+    var full = String(a.name || "").toLowerCase().replace(/\s*\(.*\)\s*/, "");
+    return searchRows().filter(function (r) { var c = r.c.toLowerCase(); return c.indexOf(full) >= 0 || c.indexOf(n + " ") === 0 || c === n; });
+  }
+  function agStats() {
+    var s = { agencies: 0, contacted: 0, registered: 0, people: 0, sent: 0, replied: 0, calls: 0 };
+    agList().forEach(function (a) {
+      s.agencies++; if (a.status !== "to_contact") s.contacted++; if (a.registered) s.registered++;
+      (a.contacts || []).forEach(function (c) { s.people++; if (c.status !== "to_contact") s.sent++; if (["replied", "call", "active"].indexOf(c.status) >= 0) s.replied++; if (["call", "active"].indexOf(c.status) >= 0) s.calls++; });
+      if (!(a.contacts || []).length && (a.notes || []).some(function (n) { return n.kind === "sent"; })) s.sent++;
+    });
+    return s;
+  }
+  function agDue() {
+    var t = todayIso(), out = [];
+    agList().forEach(function (a) {
+      (a.contacts || []).forEach(function (c) { if (c.next && c.next <= t && (c.status === "sent" || c.status === "no_answer")) out.push({ a: a, c: c, when: c.next }); });
+      if (a.next && a.next <= t && a.status === "contacted" && !(a.contacts || []).some(function (c) { return c.status !== "to_contact"; })) out.push({ a: a, c: null, when: a.next });
+    });
+    return out.sort(function (x, y) { return String(x.when).localeCompare(String(y.when)); });
+  }
+  async function agDraft(a, c, kind) {
+    if (!sample) { agMsg = L.net.noAi; renderAg(); return; }
+    var k = a.key + ":" + (c ? c.id : "team");
+    agBusy[k] = true; renderAg();
+    var who = c ? (c.name + (c.title ? ", " + c.title : "") + " at " + a.name) : ("the " + a.name + " team (general inbox)");
+    var hist = (c ? (c.notes || []) : (a.notes || [])).slice(-3).map(function (n) { return "- " + String(n.at || "").slice(0, 10) + ": " + n.text; }).join("\n");
+    var spec = kind === "connect" ? "a LinkedIn connection note of at most 280 characters (count them)" : kind === "followup" ? "a short, polite follow-up (LinkedIn message or email) about a week after the first message, at most 70 words" : kind === "email" ? "an email: first line 'Subject: ...', then a blank line, then at most 150 words" : "a LinkedIn message of at most 110 words";
+    var prompt = "Write " + spec + " from " + USER_NAME + " to " + who + ", a recruiting agency (" + (a.focus || "recruitment") + ", " + (a.city || "Ontario") + ").\n" +
+      "Goal: get on their radar for current or upcoming searches and ask for a short call. Mention what he is looking for. Use at most two achievements, the ones that fit this agency's focus best.\n" +
+      "Facts you may use (use ONLY these, never invent or round differently): " + USER_FACTS + "\n" + (hist ? "History with them:\n" + hist + "\n" : "") +
+      "Tone: confident, warm, concise, no hype words, no emojis, English. Sign as " + USER_NAME + ". Return only the message.";
+    try {
+      var r = await sample(prompt, { cache: false });
+      var txt = String((r && r.text) || "").trim(); if (!txt) throw { code: "empty" };
+      if (c) await agSave(a, { contacts: agSetContact(a, c.id, { draft: txt, draft_kind: kind }) });
+      else await agSave(a, { draft: txt, draft_kind: kind });
+      agMsg = "";
+    } catch (e) { agMsg = L.net.draftErr; }
+    agBusy[k] = false; renderAg();
+  }
+  async function agMark(a, c, what, text) {
+    var t = todayIso(), now = new Date().toISOString();
+    var lbl = L.ag.ev[what] + (text ? ": " + text : "");
+    if (c) {
+      var f = { last: t, notes: (c.notes || []).concat([{ at: now, kind: what, text: lbl }]) };
+      if (what === "sent") { f.status = c.status === "to_contact" || c.status === "no_answer" ? "sent" : c.status; f.next = addDays(t, AG_FOLLOW_DAYS); f.draft = ""; }
+      if (what === "replied") { f.status = "replied"; f.next = ""; }
+      if (what === "call") { f.status = "call"; f.next = addDays(t, 14); }
+      if (what === "no_answer") { f.status = "no_answer"; f.next = ""; }
+      var af = { contacts: agSetContact(a, c.id, f) };
+      if (a.status === "to_contact") af.status = "contacted";
+      if (what === "call" && a.status !== "registered") af.status = "active";
+      if (await agSave(a, af)) { agMsg = L.net.marked; renderAg(); }
+    } else {
+      var g = { last: t, notes: (a.notes || []).concat([{ at: now, kind: what, text: lbl }]) };
+      if (what === "sent") { if (a.status === "to_contact") g.status = "contacted"; g.next = addDays(t, AG_FOLLOW_DAYS); g.draft = ""; }
+      if (what === "replied") g.next = "";
+      if (await agSave(a, g)) { agMsg = L.net.marked; renderAg(); }
+    }
+  }
+  async function agFind(a) {
+    if (!db) return;
+    if (a._virtual && !(await agSave(a, {}))) return;
+    try { await db.doc("agreq/" + a.key).set({ key: a.key, name: a.name, url: a.url || "", state: "pending", requested_at: new Date().toISOString() }); }
+    catch (e) { agMsg = L.ct.err((e && e.code) || "unknown"); renderAg(); return; }
+    agMsg = L.ag.findQueued; renderAg();
+  }
+  function agMsgBox(a, c) {
+    var k = a.key + ":" + (c ? c.id : "team");
+    var txt = c ? c.draft : a.draft, busy = !!agBusy[k];
+    var box = el("div", "act-box");
+    var r = el("div", "acts");
+    var sel = el("select", "co-in"); sel.style.maxWidth = "260px";
+    var kinds = c ? (c.email ? ["email", "connect", "message", "followup"] : ["connect", "message", "followup", "email"]) : ["email", "followup"];
+    if (!agKind[k]) agKind[k] = kinds[0];
+    kinds.forEach(function (x) { var o = el("option", null, L.ag.kinds[x]); o.value = x; if (x === agKind[k]) o.selected = true; sel.appendChild(o); });
+    sel.addEventListener("change", function () { agKind[k] = sel.value; });
+    r.appendChild(sel);
+    var g = el("button", "btn-s primary", txt ? L.net.redo : L.net.draft); g.type = "button"; g.disabled = busy || !sample; g.addEventListener("click", function () { agDraft(a, c, agKind[k]); }); r.appendChild(g);
+    box.appendChild(r);
+    if (busy) box.appendChild(el("p", "note", L.net.drafting));
+    if (txt) { var pre = el("pre", "doc", txt); pre.setAttribute("dir", "auto"); box.appendChild(pre); }
+    var r2 = el("div", "acts");
+    if (txt) r2.appendChild(copyBtn(txt));
+    [["sent", "btn-s"], ["replied", "btn-s"], ["call", "btn-s"], ["no_answer", "btn-s"]].forEach(function (x) {
+      if (!c && (x[0] === "call" || x[0] === "no_answer")) return;
+      var b = el("button", x[1], L.ag.btn[x[0]]); b.type = "button"; b.disabled = !db; b.addEventListener("click", function () { agMark(a, c, x[0], ""); }); r2.appendChild(b);
+    });
+    box.appendChild(r2);
+    return box;
+  }
+  function agContactForm(a) {
+    var f = agForm, box = el("div", "co-box ct-form");
+    box.appendChild(el("h3", null, f.id ? L.ag.editC : L.ag.addC));
+    var g = el("div", "co-grid");
+    [["name", L.ct.name, 120], ["title", L.ct.role, 160], ["email", L.ct.email, 160], ["phone", L.ct.phone, 40], ["url", L.ct.linkedin, 300]].forEach(function (x) {
+      var lab = el("label", null, x[1]); var inp = el("input", "co-in"); inp.type = "text"; inp.maxLength = x[2]; inp.value = f[x[0]] || ""; inp.setAttribute("dir", x[0] === "name" || x[0] === "title" ? "auto" : "ltr");
+      inp.addEventListener("input", function () { f[x[0]] = inp.value; }); lab.appendChild(inp); g.appendChild(lab);
+    });
+    box.appendChild(g);
+    var r = el("div", "acts");
+    var sv = el("button", "btn-s primary", L.ct.save); sv.type = "button"; sv.disabled = !db;
+    sv.addEventListener("click", async function () {
+      if (!String(f.name || "").trim()) { agMsg = L.ct.needName; renderAg(); return; }
+      var cs = (a.contacts || []).slice();
+      var fields = { name: String(f.name).trim(), title: String(f.title || "").trim(), email: String(f.email || "").trim(), phone: String(f.phone || "").trim(), url: String(f.url || "").trim() };
+      if (f.id) cs = cs.map(function (c) { return c.id === f.id ? Object.assign({}, c, fields) : c; });
+      else cs.push(Object.assign({ id: "c" + Date.now(), status: "to_contact", last: "", next: "", notes: [], source: "Added by you" }, fields));
+      if (await agSave(a, { contacts: cs })) { agForm = null; agMsg = L.ct.saved; renderAg(); }
+    });
+    var cn = el("button", "btn-s", L.ct.cancel); cn.type = "button"; cn.addEventListener("click", function () { agForm = null; renderAg(); });
+    r.appendChild(sv); r.appendChild(cn); box.appendChild(r);
+    return box;
+  }
+  function agRowEl(a) {
+    var row = el("div", "ct-row"), open = !!agRow[a.key];
+    var tg = el("button", "acc-h ct-tg"); tg.type = "button"; tg.setAttribute("aria-expanded", open ? "true" : "false");
+    var mn = el("div", "co-main"); mn.appendChild(auto2(el("span", "co-name", a.name))); mn.appendChild(auto2(el("span", "co-meta", [a.focus, a.city].filter(Boolean).join(" · "))));
+    tg.appendChild(mn);
+    var cs = a.contacts || [], nSent = cs.filter(function (c) { return c.status !== "to_contact"; }).length, nRep = cs.filter(function (c) { return ["replied", "call", "active"].indexOf(c.status) >= 0; }).length;
+    tg.appendChild(el("span", "acc-m", L.ag.st[a.status] + (a.registered && a.status !== "registered" ? " · " + L.ag.registered : "") + " · " + L.ag.counts(cs.length, nSent, nRep)));
+    tg.appendChild(el("span", "acc-c", open ? "▾" : "▸"));
+    tg.addEventListener("click", function () { agRow[a.key] = !open; renderAg(); });
+    row.appendChild(tg);
+    if (!open) return row;
+    var body = el("div", "acc-b");
+    var line = el("div", "ct-line");
+    if (urlOk(a.url)) { var w = el("a", null, L.ag.site); w.href = a.url; w.target = "_blank"; w.rel = "noopener noreferrer"; line.appendChild(w); }
+    line.appendChild(el("span", "meta", L.net.from + (a.source || "")));
+    if (a.next) line.appendChild(el("span", "meta", L.ag.next + fmtDay(a.next)));
+    body.appendChild(line);
+    // status + registered
+    var g = el("div", "co-grid");
+    var ls = el("label", null, L.ag.statusL); var s = el("select", "co-in"); AG_ST.forEach(function (x) { var o = el("option", null, L.ag.st[x]); o.value = x; if (x === a.status) o.selected = true; s.appendChild(o); });
+    s.addEventListener("change", function () { agSave(a, { status: s.value }).then(function () { renderAg(); }); }); ls.appendChild(s); g.appendChild(ls);
+    var lr = el("label", "ct-set"); var cb = el("input"); cb.type = "checkbox"; cb.checked = !!a.registered; cb.addEventListener("change", function () { agSave(a, { registered: cb.checked, status: cb.checked && a.status !== "active" ? "registered" : a.status }).then(function () { renderAg(); }); });
+    lr.appendChild(cb); lr.appendChild(el("span", null, L.ag.regL));
+    body.appendChild(g); var rgw = el("div", "acts"); rgw.appendChild(lr); body.appendChild(rgw);
+    // jobs from this agency in your jobs file
+    var jobs = agJobs(a);
+    if (jobs.length) {
+      body.appendChild(el("strong", null, L.ag.jobsH(jobs.length)));
+      var ul = el("ul", "iv-ul");
+      jobs.slice(0, 8).forEach(function (j) { var li = el("li"); var x = el("a", null, j.t); if (urlOk(j.url)) { x.href = j.url; x.target = "_blank"; x.rel = "noopener noreferrer"; } li.appendChild(x); li.appendChild(document.createTextNode(" · " + (L.status[j.st] || j.st) + (j.sc != null && j.sc !== "" ? " · " + j.sc : ""))); ul.appendChild(li); });
+      body.appendChild(ul);
+    }
+    if (a.notes && a.notes.length) body.appendChild(notesEl(a.notes));
+    // general inbox message
+    body.appendChild(el("strong", null, L.ag.teamH));
+    body.appendChild(agMsgBox(a, null));
+    // people
+    body.appendChild(el("strong", null, L.ag.peopleH(cs.length)));
+    var req = agReqs[a.key];
+    var acts = el("div", "acts");
+    var fb = el("button", "btn-s", L.ag.find); fb.type = "button"; fb.disabled = !db || (req && (req.state === "pending" || req.state === "working")); fb.addEventListener("click", function () { agFind(a); }); acts.appendChild(fb);
+    var ab = el("button", "btn-s", L.ag.addC); ab.type = "button"; ab.disabled = !db; ab.addEventListener("click", function () { agForm = { key: a.key, name: "", title: "", email: "", phone: "", url: "" }; renderAg(); }); acts.appendChild(ab);
+    var nb = el("button", "btn-s", L.ct.addNote); nb.type = "button"; nb.disabled = !db; nb.addEventListener("click", function () { agNoteBox = { key: a.key, text: "" }; renderAg(); }); acts.appendChild(nb);
+    body.appendChild(acts);
+    if (req) body.appendChild(el("p", "note" + (req.state === "error" ? " warn" : ""), req.state === "error" ? (req.error_message || L.unknownErr) : req.state === "done" ? L.ag.findDone(fmtDay(req.done_at || "")) + (req.summary ? " " + req.summary : "") : L.ag.findWait));
+    if (agNoteBox && agNoteBox.key === a.key) body.appendChild(noteBox(agNoteBox, function (txt) { var t = String(txt || "").trim(); if (!t) return; agSave(a, { notes: (a.notes || []).concat([{ at: new Date().toISOString(), kind: "note", text: t }]) }).then(function () { agNoteBox = null; renderAg(); }); }, function () { agNoteBox = null; renderAg(); }));
+    if (agForm && agForm.key === a.key) body.appendChild(agContactForm(a));
+    cs.forEach(function (c) {
+      var cr = el("div", "co-det");
+      var hd = el("div", "panel-head"); var m2 = el("div", "co-main");
+      m2.appendChild(auto2(el("span", "co-name", c.name))); m2.appendChild(auto2(el("span", "co-meta", [c.title, L.ag.cst[c.status], c.last ? fmtDay(c.last) : "", c.next ? L.ag.next + fmtDay(c.next) : ""].filter(Boolean).join(" · "))));
+      hd.appendChild(m2);
+      var e2 = el("button", "btn-s", L.ct.edit); e2.type = "button"; e2.addEventListener("click", function () { agForm = Object.assign({ key: a.key }, c); renderAg(); }); hd.appendChild(e2);
+      cr.appendChild(hd);
+      var l2 = el("div", "ct-line");
+      if (urlOk(c.url)) { var li2 = el("a", null, "LinkedIn"); li2.href = c.url; li2.target = "_blank"; li2.rel = "noopener noreferrer"; l2.appendChild(li2); }
+      if (c.email) { var em2 = el("a", null, c.email); em2.href = "mailto:" + c.email; em2.setAttribute("dir", "ltr"); l2.appendChild(em2); }
+      if (c.phone) l2.appendChild(el("span", "meta", c.phone));
+      if (c.source) l2.appendChild(el("span", "meta", L.net.from + c.source));
+      if (l2.childNodes.length) cr.appendChild(l2);
+      if (c.why) cr.appendChild(auto2(el("p", "note", c.why)));
+      if (c.notes && c.notes.length) cr.appendChild(notesEl(c.notes));
+      cr.appendChild(agMsgBox(a, c));
+      body.appendChild(cr);
+    });
+    row.appendChild(body);
+    return row;
+  }
+  var agSecOpen = { agdue: true };
+  function agSection(root, key, title, meta, build) {
+    var p = el("div", "co-box"); var hb = el("button", "acc-h"); hb.type = "button";
+    var open = !!agSecOpen[key]; hb.setAttribute("aria-expanded", open ? "true" : "false");
+    hb.appendChild(auto2(el("span", "acc-t", title))); if (meta) hb.appendChild(el("span", "acc-m" + (meta !== "0" ? " hot" : ""), meta)); hb.appendChild(el("span", "acc-c", open ? "▾" : "▸"));
+    hb.addEventListener("click", function () { agSecOpen[key] = !open; renderAg(); });
+    p.appendChild(hb);
+    if (open) { var b = el("div", "acc-b"); build(b); p.appendChild(b); }
+    root.appendChild(p);
+  }
+  function agAddEl() {
+    var f = agAdd, box = el("div", "co-box ct-form");
+    box.appendChild(el("h3", null, L.ag.addAg));
+    var g = el("div", "co-grid");
+    [["name", L.ag.f.name, 120, "auto"], ["url", L.ag.f.url, 300, "ltr"], ["city", L.ag.f.city, 80, "auto"], ["focus", L.ag.f.focus, 120, "auto"], ["domain", L.ag.f.domain, 80, "ltr"]].forEach(function (x) {
+      var lab = el("label", null, x[1]); var inp = el("input", "co-in"); inp.type = "text"; inp.maxLength = x[2]; inp.value = f[x[0]] || ""; inp.setAttribute("dir", x[3]);
+      inp.addEventListener("input", function () { f[x[0]] = inp.value; }); lab.appendChild(inp); g.appendChild(lab);
+    });
+    box.appendChild(g);
+    var r = el("div", "acts");
+    var sv = el("button", "btn-s primary", L.ct.save); sv.type = "button"; sv.disabled = !db;
+    sv.addEventListener("click", async function () {
+      var name = String(f.name || "").trim();
+      if (!name) { agMsg = L.ct.needName; renderAg(); return; }
+      if (agList().some(function (a) { return agNorm(a.name) === agNorm(name); })) { agMsg = L.ag.exists; renderAg(); return; }
+      var url = String(f.url || "").trim(); if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+      var dom = String(f.domain || "").trim().toLowerCase().replace(/^@/, "");
+      if (!dom && url) { try { dom = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {} }
+      var key = "ag-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+      if (key === "ag-") key = "ag-" + Date.now();
+      if (agencies[key]) key += "-" + Date.now();
+      var a = { key: key, name: name, url: url, domain: dom, city: String(f.city || "").trim(), focus: String(f.focus || "").trim(), source: L.ag.addedByYou, status: "to_contact", registered: false, jobs_url: "", notes: [], contacts: [] };
+      if (await agSave(a, {})) { agAdd = null; agMsg = L.ct.saved; agFilter = "all"; agPeople = null; agQ = name; agRow[key] = true; renderAg(); }
+    });
+    var cn = el("button", "btn-s", L.ct.cancel); cn.type = "button"; cn.addEventListener("click", function () { agAdd = null; renderAg(); });
+    r.appendChild(sv); r.appendChild(cn); box.appendChild(r);
+    return box;
+  }
+  function agPeopleEl(all) {
+    var box = el("div", "co-list"); box.id = "ag-list";
+    var rows = [];
+    all.forEach(function (a) {
+      var cs = a.contacts || [];
+      cs.forEach(function (c) {
+        if (agPeople === "sent" && c.status === "to_contact") return;
+        if (agPeople === "replied" && ["replied", "call", "active"].indexOf(c.status) < 0) return;
+        rows.push({ a: a, name: c.name, meta: [c.title, a.name, L.ag.cst[c.status], c.last ? fmtDay(c.last) : ""].filter(Boolean).join(" · ") });
+      });
+      if (agPeople === "sent" && !cs.length && (a.notes || []).some(function (n) { return n.kind === "sent"; })) rows.push({ a: a, name: a.name, meta: L.ag.inbox });
+    });
+    rows.sort(function (x, y) { return String(x.a.name).localeCompare(String(y.a.name)) || String(x.name).localeCompare(String(y.name)); });
+    if (!rows.length) { var e0 = el("p", "note", L.ct.noMatch); e0.style.padding = "10px 12px"; box.appendChild(e0); }
+    rows.forEach(function (x) {
+      var r = el("div", "ct-row"); var hd = el("div", "panel-head"); var mn = el("div", "co-main");
+      mn.appendChild(auto2(el("span", "co-name", x.name))); mn.appendChild(auto2(el("span", "co-meta", x.meta)));
+      hd.appendChild(mn);
+      var o = el("button", "btn-s", L.ag.open); o.type = "button"; o.addEventListener("click", function () { agPeople = null; agFilter = "all"; agQ = x.a.name; agRow[x.a.key] = true; renderAg(); scrollToList("ag-list"); });
+      hd.appendChild(o); r.appendChild(hd); box.appendChild(r);
+    });
+    return box;
+  }
+  function renderAg() {
+    var root = $("agview");
+    var keep = document.activeElement && document.activeElement.id === "ag-q";
+    root.textContent = "";
+    root.appendChild(el("h2", "co-h", L.ag.title));
+    root.appendChild(el("p", "pg-intro", L.ag.intro));
+    if (agMsg) root.appendChild(el("p", "note", agMsg));
+    if (!agAdd) { var ta = el("div", "acts"); var ab = el("button", "btn-s primary", L.ag.addAg); ab.type = "button"; ab.disabled = !db; ab.addEventListener("click", function () { agAdd = { name: "", url: "", city: "", focus: "", domain: "" }; agMsg = ""; renderAg(); }); ta.appendChild(ab); root.appendChild(ta); }
+    else root.appendChild(agAddEl());
+    var s = agStats(), strip = el("div", "strip");
+    [[s.agencies, L.ag.w.agencies, "all", null], [s.contacted, L.ag.w.contacted, "_contacted", null], [s.registered, L.ag.w.registered, "_registered", null], [s.people, L.ag.w.people, "all", "all"], [s.sent, L.ag.w.sent, "all", "sent"], [s.replied, L.ag.w.replied, "all", "replied"]].forEach(function (x) {
+      var on = agPeople === x[3] && (x[3] ? true : agFilter === x[2]);
+      strip.appendChild(clickTile(x[0], x[1], on, function () { agPeople = x[3]; agFilter = x[2]; agQ = ""; renderAg(); scrollToList("ag-list"); }));
+    });
+    var sb = el("div", "co-box"); sb.appendChild(strip); root.appendChild(sb);
+    var due = agDue();
+    agSection(root, "agdue", L.ag.dueH, String(due.length), function (b) {
+      if (!due.length) { b.appendChild(el("p", "note", L.net.noneDue)); return; }
+      due.forEach(function (d) {
+        var r = el("div", "ct-row"); var mn = el("div", "co-main");
+        mn.appendChild(auto2(el("span", "co-name", (d.c ? d.c.name + " · " : "") + d.a.name))); mn.appendChild(auto2(el("span", "co-meta", L.ag.dueWhy + fmtDay(d.when))));
+        r.appendChild(mn);
+        var o = el("button", "btn-s", L.ag.open); o.type = "button"; o.addEventListener("click", function () { agRow[d.a.key] = true; agFilter = "all"; agQ = d.a.name; renderAg(); }); var ra = el("div", "acts"); ra.appendChild(o); r.appendChild(ra);
+        b.appendChild(r);
+      });
+    });
+    var all = agList();
+    var counts = {}; all.forEach(function (a) { counts[a.status] = (counts[a.status] || 0) + 1; });
+    var chips = el("div", "acts");
+    [["all", L.net.all + " (" + all.length + ")"]].concat(AG_ST.filter(function (x) { return counts[x]; }).map(function (x) { return [x, L.ag.st[x] + " (" + counts[x] + ")"]; })).forEach(function (c) {
+      var b = el("button", "btn-s" + (!agPeople && agFilter === c[0] ? " primary" : ""), c[1]); b.type = "button"; b.addEventListener("click", function () { agFilter = c[0]; agPeople = null; renderAg(); }); chips.appendChild(b);
+    });
+    root.appendChild(chips);
+    if (agPeople || agFilter.charAt(0) === "_") {
+      var sh = el("div", "acts"); sh.appendChild(el("strong", null, L.ag.showing(agPeople ? L.ag.pv[agPeople] : L.ag.fv[agFilter])));
+      var sa = el("button", "btn-s", L.ag.showAll); sa.type = "button"; sa.addEventListener("click", function () { agPeople = null; agFilter = "all"; renderAg(); }); sh.appendChild(sa);
+      root.appendChild(sh);
+    }
+    if (agPeople) { root.appendChild(agPeopleEl(all)); return; }
+    var head = el("div", "acts");
+    var q = el("input", "co-in"); q.type = "search"; q.id = "ag-q"; q.placeholder = L.ag.search; q.setAttribute("aria-label", L.ag.search); q.value = agQ; q.style.maxWidth = "320px"; q.setAttribute("dir", "auto");
+    q.addEventListener("input", function () { agQ = q.value; renderAg(); });
+    head.appendChild(q); root.appendChild(head);
+    var qq = pKey(agQ);
+    var list = all.filter(function (a) { return (agFilter === "all" || a.status === agFilter || (agFilter === "_contacted" && a.status !== "to_contact") || (agFilter === "_registered" && a.registered)) && (!qq || pKey([a.name, a.focus, a.city, (a.contacts || []).map(function (c) { return c.name + " " + c.title; }).join(" ")].join(" ")).indexOf(qq) >= 0); })
+      .sort(function (x, y) { return AG_ST.indexOf(y.status) - AG_ST.indexOf(x.status) || String(x.name).localeCompare(String(y.name)); });
+    var box = el("div", "co-list"); box.id = "ag-list";
+    if (!list.length) box.appendChild(el("p", "note", L.ct.noMatch)).style.padding = "10px 12px";
+    list.forEach(function (a) { box.appendChild(agRowEl(a)); });
+    root.appendChild(box);
+    if (keep) { var f = $("ag-q"); if (f) { f.focus(); try { f.setSelectionRange(f.value.length, f.value.length); } catch (x) {} } }
+  }
+
   function renderCt() {
     var root = $("ctview");
     var keep = document.activeElement && document.activeElement.id === "ct-q";
     root.textContent = "";
     root.appendChild(el("h2", "co-h", L.ct.title));
     root.appendChild(el("p", "pg-intro", L.ct.intro));
-    if (ctForm) root.appendChild(personForm());
-    else {
+    if (netMsg) root.appendChild(el("p", "note", netMsg));
+    if (ctForm) { root.appendChild(personForm()); }
+    root.appendChild(netStrip());
+    var due = netDue();
+    netSection(root, "due", L.net.dueH, String(due.length), function (b) { netDueEl(b, due); });
+    var nEv = (netEvents && Array.isArray(netEvents.items)) ? netEvents.items.filter(function (x) { return String(x.end || x.date || "") >= todayIso(); }).length : 0;
+    netSection(root, "events", L.net.eventsH, String(nEv), netEventsEl);
+    if (!ctForm) {
       var top = el("div", "acts");
       var ab = el("button", "btn-s primary", L.ct.addH); ab.type = "button"; ab.disabled = !db;
       ab.addEventListener("click", function () { ctForm = { name: "", company: "", role: "", email: "", phone: "", linkedin: "", note: "" }; ctMsg2 = ""; renderCt(); });
       top.appendChild(ab); if (ctMsg2) top.appendChild(el("span", "note", ctMsg2)); root.appendChild(top);
-      // people from the activity log who are not contacts yet
-      var have = {}; people.forEach(function (x) { have[pKey(x.name)] = 1; });
-      var seen = {}, sug = [];
-      activity.forEach(function (a) { var k = pKey(a.person); if (!k || have[k] || seen[k]) return; seen[k] = 1; sug.push(a); });
-      if (sug.length) {
-        var sb = el("div", "co-box"); sb.dataset.meta = String(sug.length); sb.appendChild(el("h3", null, L.ct.sugH));
-        var chips = el("div", "ct-sug");
-        sug.slice(0, 30).forEach(function (a) {
-          var b = el("button", "btn-s", L.ct.sugAdd(a.person)); b.type = "button"; b.setAttribute("dir", "auto");
-          b.addEventListener("click", function () {
-            var u = String(a.person_url || "");
-            ctForm = { name: a.person, company: a.company || "", role: "", email: /@/.test(u) && !urlOk(u) ? u : "", phone: "", linkedin: urlOk(u) ? u : "", note: "" };
-            ctMsg2 = ""; renderCt(); try { window.scrollTo(0, 0); } catch (e) {}
-          });
-          chips.appendChild(b);
-        });
-        sb.appendChild(chips); root.appendChild(sb);
-      }
     }
-    accordionize(root, ctAcc, "s:", ".co-box:not(.ct-form)");
+    var all = netList();
+    var counts = {}; all.forEach(function (e) { counts[e.stage] = (counts[e.stage] || 0) + 1; });
+    var chips = el("div", "acts");
+    [["all", L.net.all + " (" + all.length + ")"]].concat(NET_STAGES.filter(function (s) { return counts[s]; }).map(function (s) { return [s, L.net.st[s] + " (" + counts[s] + ")"]; }))
+      .concat([["refer", L.net.referShort + " (" + all.filter(function (e) { return e.can_refer; }).length + ")"]]).forEach(function (c) {
+        var b = el("button", "btn-s" + (netFilter === c[0] ? " primary" : ""), c[1]); b.type = "button"; b.addEventListener("click", function () { netFilter = c[0]; renderCt(); }); chips.appendChild(b);
+      });
+    root.appendChild(chips);
     var head = el("div", "acts");
     var q = el("input", "co-in"); q.type = "search"; q.id = "ct-q"; q.placeholder = L.ct.search; q.setAttribute("aria-label", L.ct.search); q.value = ctQ; q.style.maxWidth = "320px"; q.setAttribute("dir", "auto");
     q.addEventListener("input", function () { ctQ = q.value; renderCt(); });
-    head.appendChild(q); head.appendChild(el("span", "meta", L.ct.count(people.length))); root.appendChild(head);
-    var qq = pKey(ctQ);
-    var list = people.filter(function (x) { return !qq || pKey([x.name, x.company, x.role, x.note, (x.notes || []).map(function (n) { return n.text; }).join(" ")].join(" ")).indexOf(qq) >= 0; })
-      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
-    var box = el("div", "co-list");
-    if (!people.length) box.appendChild(el("p", "note", L.ct.none)).style.padding = "10px 12px";
+    head.appendChild(q); root.appendChild(head);
+    var qq = pKey(ctQ), wkMon = netWeek().mon;
+    if (netFilter.indexOf("wk_") === 0) {
+      var sh = el("div", "acts"); sh.appendChild(el("strong", null, L.ag.showing(L.net.wkv[netFilter]))); var sa = el("button", "btn-s", L.ag.showAll); sa.type = "button"; sa.addEventListener("click", function () { netFilter = "all"; renderCt(); }); sh.appendChild(sa); root.appendChild(sh);
+      root.appendChild(el("p", "note", L.net.wkNote));
+    }
+    var list = all.filter(function (e) {
+      if (netFilter === "refer" && !e.can_refer) return false;
+      if (netFilter.indexOf("wk_") === 0) { if (!netWkMatch(e, netFilter, wkMon)) return false; }
+      else if (netFilter !== "all" && netFilter !== "refer" && e.stage !== netFilter) return false;
+      return !qq || pKey([e.name, e.company, e.role, e.location, e.summary, e.notes.map(function (n) { return n.text; }).join(" ")].join(" ")).indexOf(qq) >= 0;
+    }).sort(function (a, b) { return (NET_RANK[b.stage] || 0) - (NET_RANK[a.stage] || 0) || String(b.last).localeCompare(String(a.last)) || String(a.name).localeCompare(String(b.name)); });
+    var box = el("div", "co-list"); box.id = "ct-list";
+    if (!all.length) box.appendChild(el("p", "note", L.ct.none)).style.padding = "10px 12px";
     else if (!list.length) box.appendChild(el("p", "note", L.ct.noMatch)).style.padding = "10px 12px";
-    list.forEach(function (pp) {
-      var row = el("div", "ct-row");
-      var t = el("div", "panel-head");
-      var nm = el("span", "co-name", pp.name);
-      nm.setAttribute("dir", "auto");
-      var nmWrap = el("div", "co-main"); nmWrap.appendChild(nm);
-      var sub = [pp.role, pp.company ? L.ct.at + pp.company : ""].filter(Boolean).join(" ");
-      if (sub) nmWrap.appendChild(auto2(el("span", "co-meta", sub)));
-      t.appendChild(nmWrap);
-      var acts = el("div", "acts");
-      if (ctConfirm === pp.id) {
-        acts.appendChild(el("span", "meta", L.ct.removeQ));
-        var y = el("button", "btn-s confirm", L.ct.yes); y.type = "button"; y.addEventListener("click", function () { removePerson(pp); });
-        var n = el("button", "btn-s", L.ct.cancel); n.type = "button"; n.addEventListener("click", function () { ctConfirm = null; renderCt(); });
-        acts.appendChild(y); acts.appendChild(n);
-      } else {
-        var ed = el("button", "btn-s", L.ct.edit); ed.type = "button"; ed.disabled = !db; ed.addEventListener("click", function () { ctForm = Object.assign({}, pp); ctMsg2 = ""; renderCt(); try { window.scrollTo(0, 0); } catch (e) {} });
-        var an = el("button", "btn-s", L.ct.addNote); an.type = "button"; an.disabled = !db; an.addEventListener("click", function () { ctNote = { id: pp.id, text: "" }; renderCt(); });
-        var rm = el("button", "btn-s", L.ct.remove); rm.type = "button"; rm.disabled = !db; rm.addEventListener("click", function () { ctConfirm = pp.id; renderCt(); });
-        acts.appendChild(an); acts.appendChild(ed); acts.appendChild(rm);
-      }
-      var openRow = !!ctRowOpen[pp.id] || (ctNote && ctNote.id === pp.id) || ctConfirm === pp.id;
-      var tg = el("button", "acc-h ct-tg"); tg.type = "button"; tg.setAttribute("aria-expanded", openRow ? "true" : "false");
-      tg.appendChild(nmWrap);
-      var nNotes = (pp.notes || []).length, nA = activity.filter(function (a) { return pKey(a.person) === pKey(pp.name); }).length;
-      var mm = [nNotes ? L.ct.nNotes(nNotes) : "", nA ? L.ct.acts(nA) : ""].filter(Boolean).join(" · ");
-      if (mm) tg.appendChild(el("span", "acc-m", mm));
-      tg.appendChild(el("span", "acc-c", openRow ? "▾" : "▸"));
-      tg.addEventListener("click", function () { ctRowOpen[pp.id] = !openRow; renderCt(); });
-      row.appendChild(tg);
-      var rowBody = el("div", "acc-b"); rowBody.hidden = !openRow; row.appendChild(rowBody);
-      rowBody.appendChild(acts);
-      row = rowBody;
-      var line = el("div", "ct-line");
-      if (urlOk(pp.linkedin)) { var li = el("a", null, "LinkedIn"); li.href = pp.linkedin; li.target = "_blank"; li.rel = "noopener noreferrer"; line.appendChild(li); }
-      if (pp.email) { var em = el("a", null, pp.email); em.href = "mailto:" + pp.email; em.setAttribute("dir", "ltr"); line.appendChild(em); }
-      if (pp.phone) { var ph = el("a", null, pp.phone); ph.href = "tel:" + String(pp.phone).replace(/[^\d+]/g, ""); ph.setAttribute("dir", "ltr"); line.appendChild(ph); }
-      var nActs = activity.filter(function (a) { return pKey(a.person) === pKey(pp.name); }).length;
-      if (nActs) { var lk = el("button", "btn-s", L.ct.acts(nActs)); lk.type = "button"; lk.addEventListener("click", function () { pplQ = pp.name; go("log"); }); line.appendChild(lk); }
-      if (line.childNodes.length) row.appendChild(line);
-      if (pp.note) row.appendChild(auto2(el("p", "iv-a", pp.note)));
-      if (pp.notes && pp.notes.length) row.appendChild(notesEl(pp.notes));
-      if (ctNote && ctNote.id === pp.id) row.appendChild(noteBox(ctNote, function (txt) { addPersonNote(pp, txt); }, function () { ctNote = null; renderCt(); }));
-      box.appendChild(row.parentNode);
-    });
+    list.slice(0, 300).forEach(function (e) { box.appendChild(netRow(e)); });
     root.appendChild(box);
-    if (keep) { var f = $("ct-q"); if (f) { f.focus(); try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} } }
+    if (keep) { var f = $("ct-q"); if (f) { f.focus(); try { f.setSelectionRange(f.value.length, f.value.length); } catch (x) {} } }
   }
 
   /* ---------- company details ---------- */
@@ -2957,6 +3692,22 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     ivSection(root, "res", L.iv.resH, ((r.sources || []).length ? L.iv.nSources((r.sources || []).length) : "") + ((r.extra || []).length ? " · " + L.iv.nExtra(r.extra.length) : "") + (pendX.length ? " · " + L.iv.inProgress : ""), function (rp) {
       if (r.summary) rp.appendChild(auto(el("p", "iv-a", r.summary)));
       if (Array.isArray(r.points) && r.points.length) { var ul = auto(el("ul", "iv-ul")); r.points.forEach(function (x) { ul.appendChild(auto(el("li", null, x))); }); rp.appendChild(ul); }
+      // 2026-11-02: deep research sections, when the kit has them
+      var dp = r.deep || null;
+      if (dp) {
+        var D = L.iv.deep;
+        var para = function (h, t) { if (!t) return; rp.appendChild(el("strong", null, h)); rp.appendChild(auto(el("p", "iv-a", String(t)))); };
+        var list = function (h, arr, fn) { if (!Array.isArray(arr) || !arr.length) return; rp.appendChild(el("strong", null, h)); var u = auto(el("ul", "iv-ul")); arr.forEach(function (x) { u.appendChild(auto(el("li", null, fn ? fn(x) : String(x)))); }); rp.appendChild(u); };
+        para(D.business, dp.business);
+        para(D.market, dp.market);
+        list(D.competitors, dp.competitors, function (x) { return (x.name || "") + (x.note ? " - " + x.note : ""); });
+        para(D.finance, dp.finance);
+        list(D.news, dp.news, function (x) { return (x.date ? x.date + ": " : "") + (x.item || ""); });
+        list(D.opps, dp.opportunities);
+        list(D.risks, dp.challenges);
+        list(D.problems, dp.role_problems);
+        list(D.angles, dp.angles, function (x) { return (x.problem || "") + " -> " + (x.experience || ""); });
+      }
       if (r.stage) { rp.appendChild(el("strong", null, L.iv.stage)); rp.appendChild(auto(el("p", "iv-a", r.stage))); }
       if (Array.isArray(r.extra) && r.extra.length) {
         rp.appendChild(el("strong", null, L.iv.extraH));
@@ -3149,9 +3900,9 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
     if (db) {
       try {
         db.doc("runs/current").onSnapshot(function (s) { run = s.exists ? s.data() : null; renderBar(); }, function () {});
-        db.doc("board/current").onSnapshot(function (s) { board = s.exists ? s.data() : null; searchCache = null; render(); }, function () {});
+        db.doc("board/current").onSnapshot(function (s) { board = s.exists ? s.data() : null; searchCache = null; render(); scheduleAutoClose(); }, function () {});
         db.collection("search").limit(20).onSnapshot(function (q) {
-          searchParts = {}; q.docs.forEach(function (d) { var x = d.data(); if (x && x.part != null) searchParts["p" + x.part] = x; }); searchCache = null; renderSearch();
+          searchParts = {}; q.docs.forEach(function (d) { var x = d.data(); if (x && x.part != null) searchParts["p" + x.part] = x; }); searchCache = null; renderSearch(); renderFups(); scheduleAutoClose();
         }, function () {});
         db.doc("status/pipeline").onSnapshot(function (s) { legacy = s.exists ? s.data() : null; renderStrip(); }, function () {});
         db.doc("summary/today").onSnapshot(function (s) { summary = s.exists ? s.data() : null; renderMorning(); }, function () {});
@@ -3162,6 +3913,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
         db.collection("activity").limit(1000).onSnapshot(function (q) {
           activity = q.docs.map(function (d) { return d.data(); }).filter(function (a) { return a && a.id; });
           renderFups(); renderBoard(); if (openId) renderJob(); else if (pplOpen) renderPpl();
+          scheduleAutoClose();
         }, function () {});
         db.collection("rounds").limit(500).onSnapshot(function (q) {
           var m = {}; q.docs.forEach(function (d) { var x = d.data(); if (x && x.job_id) m[x.job_id] = x; });
@@ -3171,6 +3923,10 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
           var m = {}; q.docs.forEach(function (d) { var x = d.data(); if (x && x.job_id) m[x.job_id] = x; });
           jobmeta = m; renderBoard(); if (openId) renderJob();
         }, function () {});
+        db.collection("agencies").limit(200).onSnapshot(function (q) { var m = {}; q.docs.forEach(function (d) { m[d.id] = d.data(); }); agencies = m; if (agOpen) renderAg(); }, function () {});
+        db.collection("agreq").limit(200).onSnapshot(function (q) { var m = {}; q.docs.forEach(function (d) { m[d.id] = d.data(); }); agReqs = m; if (agOpen) renderAg(); }, function () {});
+        db.doc("network/linkedin").onSnapshot(function (s) { netDoc = s.exists ? s.data() : null; if (ctOpen) renderCt(); if (agOpen) renderAg(); }, function () {});
+        db.doc("events/current").onSnapshot(function (s) { netEvents = s.exists ? s.data() : null; if (ctOpen) renderCt(); }, function () {});
         db.collection("people").limit(1000).onSnapshot(function (q) {
           people = q.docs.map(function (d) { return d.data(); }).filter(function (x) { return x && x.id; }); if (ctOpen) renderCt(); if (coOpen) renderCo();
         }, function () {});
@@ -3201,6 +3957,7 @@ pre.doc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family
           actions = q.docs.map(function (d) { return d.data(); });
           // the status and follow-up tiles follow their moves too, not only the board.
           renderMorning(); renderAlerts(); renderStrip(); renderFups(); renderBoard(); renderIvBoard();
+          scheduleAutoClose();
         }, function () {});
       } catch (e) {}
     }

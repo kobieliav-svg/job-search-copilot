@@ -5,8 +5,8 @@
 Job Search Copilot is a set of instructions and small scripts that turns Claude into a
 job-search assistant. It reads job postings, scores each one against your real background,
 writes a tailored resume and cover letter for the ones you choose, and prepares you for
-interviews. In the full setup it also searches for new jobs every night and shows everything
-on a personal dashboard.
+interviews. In the full setup it also searches for new jobs every night, keeps track of your
+network and the recruiting agencies you work with, and shows everything on a personal dashboard.
 
 It was built by a job seeker with no coding background, in conversation with Claude, and is
 shared free.
@@ -28,7 +28,7 @@ shared free.
 | A spreadsheet that tracks every job and its status | ✓ | ✓ |
 | Nightly search of company career sites and other sources you choose | | ✓ |
 | Morning summary: new jobs scored, replies from employers spotted in your email | | ✓ |
-| Personal dashboard: job board, follow-ups, interviews, contacts, activity log, chat | | ✓ |
+| Personal dashboard: job board, follow-ups, interviews, networking, recruiting agencies, activity log, chat | | ✓ |
 
 ## 1. Choose your level
 
@@ -321,11 +321,51 @@ dictating with Windows + H) and Claude rates your answer.
 
 ![Interview kit](docs/images/06-interview-kit.png)
 
-### Activity log, contacts and companies
+### Activity log, networking and companies
 - **Activity log:** everything you did with people (emails, calls, messages, referrals), with a
   reminder date. Each entry stays open as a thread until you close it with how it ended.
-- **Contacts:** the people in your network, with notes.
 - **Companies:** the employers in your nightly scan. Add, pause or remove them here.
+
+### Networking
+Everyone in your job-search network in one place.
+
+![Networking](docs/images/12-networking.png)
+
+- **This week:** reached out, accepted, replies, meetings and referrals. Click a tile to see
+  the people behind the number.
+- **Messages waiting for you:** a thank-you after a meeting, a light check-in when you have not
+  been in touch for about five weeks, birthdays, and the holidays you chose for each person
+  (Canadian, Jewish or both). Press **Write the message**: Claude writes it in the tone you
+  noted for that person, using only the facts from your profile. You copy it and send it
+  yourself, then press **I sent it**.
+- **Networking events near you:** refreshed every Monday by the morning run, each with its
+  registration link.
+- **Each person:** a stage (reached out, connected, replied, meeting set, met, follow up,
+  long-term contact, closed), how strong the relationship is, whether they can refer you, a
+  birthday, a note on how to talk to them, meetings, and every update you log (email,
+  WhatsApp, phone, in person).
+- If you connected Gmail, the morning run notices emails you sent to your contacts and their
+  replies, and updates them (it only reads your mail).
+
+### Recruiting agencies
+The agencies you work with, the recruiters inside them, and where each one stands.
+
+![Recruiting agencies](docs/images/13-agencies.png)
+
+- **The numbers on top:** agencies, contacted, registered, recruiters, messages sent and
+  replies. Click a tile to open that list.
+- **Add an agency** with its name and website. For each agency: its website, its status, a
+  "registered / sent my resume" tick, the jobs it posted that are in your search, notes, and a
+  message to its general inbox.
+- **Recruiters:** add them yourself, or press **Find recruiters**; the next morning run looks
+  on the agency's website and (read only, in your Chrome) on LinkedIn, and adds 2-5 people.
+  It takes an email address only when it is published; it never guesses one.
+- **Messages:** choose a LinkedIn invitation note, a LinkedIn message, an email or a follow-up,
+  and press **Write the message**. Then mark **I sent it** (a follow-up reminder comes after
+  7 days), **Got a reply**, **Call held** or **No answer**.
+- If you connected Gmail, the morning run marks the emails you sent to an agency and its
+  replies (read only).
+- Nothing is ever sent for you.
 
 ![Activity log](docs/images/07-activity-log.png)
 
